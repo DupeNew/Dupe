@@ -1,0 +1,589 @@
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+
+-- A local 'Spawner' object to provide placeholder data and functions.
+local Spawner = {}
+
+function Spawner:GetPets()
+    -- Complete pet list extracted from the provided bytecode.
+    return {
+        "Dog", "Golden Lab", "Bunny", "Black Bunny", "Cat", "Orange Tabby", "Deer", 
+        "Spotted Deer", "Monkey", "Silver Monkey", "Chicken", "Rooster", "Pig", 
+        "Turtle", "Cow", "Snail", "Giant Ant", "Dragonfly", "Polar Bear", "Panda", 
+        "Sea Otter", "Caterpillar", "Praying Mantis", "Hedgehog", "Kiwi", "Mole", 
+        "Frog", "Echo Frog", "Owl", "Night Owl", "Raccoon", "Grey Mouse", "Squirrel", 
+        "Brown Mouse", "Red Giant Ant", "Red Fox", "Chicken Zombie", "Blood Hedgehog", 
+        "Blood Kiwi", "Blood Owl", "Moon Cat", "Bee", "Honey Bee", "Petal Bee", 
+        "Bear Bee", "Queen Bee", "Wasp", "Tarantula Hawk", "Moth", "Butterfly", 
+        "Disco Bee", "Cooked Owl", "Pack Bee", "Firefly", "Red Dragon", "Golden Bee"
+    }
+end
+
+function Spawner:GetSeeds()
+    -- Complete seed list extracted from the provided bytecode.
+    return {
+        "Apple Seed", "Avocado Seed", "Bamboo Seed", "Banana Seed", "Beanstalk Seed", 
+        "Bee Balm", "Bendboo", "Blood Banana Seed", "Blueberry Seed", "Cacao Seed", 
+        "Cactus Seed", "Candy Blossom Seed", "Candy Sunflower Seed", "Carrot Seed", 
+        "Celestiberry Seed", "Cherry Blossom Seed", "Chocolate Carrot Seed", "Cocovine", 
+        "Coconut Seed", "Corn Seed", "Cranberry Seed", "Crimson Vine Seed", "Crocus", 
+        "Cursed Fruit Seed", "Daffodil Seed", "Dandelion", "Dragon Fruit Seed", 
+        "Dragon Pepper", "Durian Seed", "Easter Egg Seed", "Eggplant Seed", 
+        "Elephant Ears", "Ember Lily", "Foxglove", "Glowshroom Seed", "Grape Seed", 
+        "Green Apple", "Hive Fruit", "Honeysuckle", "Ice Cream Bean Seed", "Lavender", 
+        "Lemon Seed", "Lilac", "Loquat Seed", "Lotus Seed", "Lumira", "Mango Seed", 
+        "Manuka Flower", "Mint Seed", "Moon Blossom Seed", "Moon Melon Seed", 
+        "Moonflower Seed", "Moonglow Seed", "Moon Mango Seed", "Mushroom Seed", 
+        "Nectar Thorn", "Nectarine", "Nectarshade", "Nightshade Seed", "Noble Flower", 
+        "Orange Tulip", "Papaya Seed", "Parasol Flower", "Passionfruit Seed", 
+        "Peach Seed", "Pear Seed", "Pepper Seed", "Pineapple Seed", "Pink Lily Seed", 
+        "Prickly Pear", "Pumpkin Seed", "Purple Dahlia Seed", "Raspberry Seed", 
+        "Red Lollipop Seed", "Rose", "Soul Fruit Seed", "Starfruit Seed", 
+        "Strawberry Seed", "Succulent Seed", "Sugar Apple", "Suncoil", "Sunflower", 
+        "Tomato Seed", "Traveler's Fruit", "Venus Fly Trap Seed", "Violet Corn", 
+        "Watermelon Seed"
+    }
+end
+
+function Spawner:GetEggs()
+    -- Complete egg list extracted from the provided bytecode.
+    return {
+        "Common Egg", "Uncommon Egg", "Rare Egg", "Legendary Egg", "Mythical Egg", "Bug Egg"
+    }
+end
+
+-- Mock functions to prevent errors when action buttons are clicked.
+function Spawner.SpawnPet(name, kg, age)
+    print(string.format("UI ACTION: Spawn Pet '%s' (Size: %s, Age: %s)", name, tostring(kg), tostring(age)))
+end
+
+function Spawner.SpawnSeed(name)
+    print(string.format("UI ACTION: Spawn Seed '%s'", name))
+end
+
+function Spawner.PlaceSeed(name)
+    print(string.format("UI ACTION: Place Seed '%s'", name))
+end
+
+function Spawner.SpawnEgg(name)
+    print(string.format("UI ACTION: Spawn Egg '%s'", name))
+end
+
+function Spawner.Spin(packName)
+    print(string.format("UI ACTION: Spin Flower Pack '%s'", packName))
+end
+
+
+local THEME = {
+    Background = Color3.fromRGB(24, 25, 28),
+    Primary = Color3.fromRGB(33, 35, 40),
+    Secondary = Color3.fromRGB(45, 48, 54),
+    Accent = Color3.fromRGB(138, 43, 226),
+    AccentDark = Color3.fromRGB(158, 73, 255),
+    Text = Color3.fromRGB(220, 221, 222),
+    TextSecondary = Color3.fromRGB(148, 152, 158),
+    Error = Color3.fromRGB(231, 76, 60),
+    Close = Color3.fromRGB(200, 80, 80),
+    Font = Enum.Font.Gotham,
+    FontBold = Enum.Font.GothamBold,
+}
+
+local SFX = {
+    OpenClose = Instance.new("Sound", SoundService),
+    TabSwitch = Instance.new("Sound", SoundService),
+    Hover = Instance.new("Sound", SoundService),
+    Click = Instance.new("Sound", SoundService)
+}
+SFX.OpenClose.SoundId = "rbxassetid://12222200"
+SFX.TabSwitch.SoundId = "rbxassetid://452267918"
+SFX.Hover.SoundId = "rbxassetid://4612384434"
+SFX.Click.SoundId = "rbxassetid://119233047711484"
+
+for _, sound in pairs(SFX) do
+    sound.Volume = 0.4
+end
+
+if _G.ProSpawnerCleanup then
+    _G.ProSpawnerCleanup()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ProSpawnerUI"
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = game.CoreGui
+
+local ConnectionManager = {}
+table.insert(ConnectionManager, screenGui.Destroying:Connect(function()
+    if _G.ProSpawnerCleanup then
+        _G.ProSpawnerCleanup = nil
+    end
+end))
+
+function cleanup()
+    for _, connection in ipairs(ConnectionManager) do
+        connection:Disconnect()
+    end
+    table.clear(ConnectionManager)
+    if screenGui and screenGui.Parent then
+        screenGui:Destroy()
+    end
+    _G.ProSpawnerCleanup = nil
+end
+
+_G.ProSpawnerCleanup = cleanup
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 560, 0, 380)
+mainFrame.Position = UDim2.new(0.5, -280, 0.5, -190)
+mainFrame.BackgroundColor3 = THEME.Primary
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Visible = false
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
+local stroke = Instance.new("UIStroke", mainFrame)
+stroke.Color = Color3.fromRGB(15, 15, 15)
+stroke.Thickness = 2
+mainFrame.Parent = screenGui
+
+local function GetSafeData(func)
+    local data = {}
+    local callSuccess, resultData = pcall(func)
+    if callSuccess and type(resultData) == "table" then
+        data = resultData
+        table.sort(data)
+    end
+    return data
+end
+
+local pet_names = GetSafeData(function() return Spawner:GetPets() end)
+local seed_names = GetSafeData(function() return Spawner:GetSeeds() end)
+local egg_names = GetSafeData(function() return Spawner:GetEggs() end)
+-- Complete seed pack list extracted from the provided bytecode.
+local flower_seed_pack_names = {
+    "Normal Seed Pack", "Exotic Seed Pack", "Basic Seed Pack", "Premium Seed Pack",
+    "Rainbow Basic Seed Pack", "Rainbow Premium Seed Pack", "Night Seed Pack",
+    "Flower Seed Pack", "Exotic Flower Seed Pack", "Rainbow Exotic Flower Seed Pack",
+    "Crafters Seed Pack", "Exotic Crafters Seed Pack", "Rainbow Exotic Crafters Seed Pack",
+    "Premium Night Seed Pack"
+}
+table.sort(flower_seed_pack_names)
+
+local header = Instance.new("Frame", mainFrame)
+header.Name = "Header"
+header.Size = UDim2.new(1, 0, 0, 36)
+header.BackgroundColor3 = THEME.Background
+
+local title = Instance.new("TextLabel", header)
+title.Name = "Title"
+title.Size = UDim2.new(1, -50, 1, 0)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.BackgroundTransparency = 1
+title.Font = THEME.FontBold
+title.Text = "KAWAII Spawner by proautixt"
+title.TextColor3 = THEME.Text
+title.TextSize = 18
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+local closeButton = Instance.new("TextButton", header)
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 28, 0, 24)
+closeButton.Position = UDim2.new(1, -30, 0.5, 0)
+closeButton.AnchorPoint = Vector2.new(0.5, 0.5)
+closeButton.BackgroundColor3 = THEME.Primary
+closeButton.Font = THEME.FontBold
+closeButton.Text = "X"
+closeButton.TextColor3 = THEME.TextSecondary
+closeButton.TextSize = 16
+Instance.new("UICorner", closeButton).CornerRadius = UDim.new(0, 6)
+
+function createDraggable(frame, handle)
+    table.insert(ConnectionManager, handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local dragStart = input.Position
+            local startPos = frame.Position
+            local moveConnection, endConnection
+            moveConnection = UserInputService.InputChanged:Connect(function(inputChanged)
+                if inputChanged.UserInputType == Enum.UserInputType.MouseMovement or inputChanged.UserInputType == Enum.UserInputType.Touch then
+                    local delta = inputChanged.Position - dragStart
+                    frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                end
+            end)
+            endConnection = UserInputService.InputEnded:Connect(function(inputEnded)
+                if inputEnded.UserInputType == Enum.UserInputType.MouseButton1 or inputEnded.UserInputType == Enum.UserInputType.Touch then
+                    moveConnection:Disconnect()
+                    endConnection:Disconnect()
+                end
+            end)
+            table.insert(ConnectionManager, moveConnection)
+            table.insert(ConnectionManager, endConnection)
+        end
+    end))
+end
+createDraggable(mainFrame, header)
+
+local contentContainer = Instance.new("Frame", mainFrame)
+contentContainer.Name = "ContentContainer"
+contentContainer.Size = UDim2.new(1, -20, 1, -95)
+contentContainer.Position = UDim2.new(0.5, 0, 0, 85)
+contentContainer.AnchorPoint = Vector2.new(0.5, 0)
+contentContainer.BackgroundTransparency = 1
+
+local tabContainer = Instance.new("Frame", mainFrame)
+tabContainer.Name = "TabContainer"
+tabContainer.Size = UDim2.new(1, 0, 0, 44)
+tabContainer.Position = UDim2.new(0, 0, 0, 36)
+tabContainer.BackgroundColor3 = THEME.Primary
+local tabLayout = Instance.new("UIListLayout", tabContainer)
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+tabLayout.Padding = UDim.new(0, 5)
+Instance.new("UIPadding", tabContainer).PaddingLeft = UDim.new(0, 10)
+
+local pages = {}
+local activeTabButton = nil
+local isSwitchingTabs = false
+
+function SwitchTab(tabButton)
+    if isSwitchingTabs or activeTabButton == tabButton then return end
+    isSwitchingTabs = true
+
+    SFX.TabSwitch:Play()
+    
+    if activeTabButton then
+        TweenService:Create(activeTabButton, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Primary, TextColor3 = THEME.TextSecondary}):Play()
+        if pages[activeTabButton.Name] then
+            local oldPage = pages[activeTabButton.Name]
+            TweenService:Create(oldPage, TweenInfo.new(0.2), {GroupTransparency = 1}):Play()
+            task.delay(0.2, function()
+                if oldPage.Parent then oldPage.Visible = false end
+            end)
+        end
+    end
+    
+    activeTabButton = tabButton
+    local page = pages[tabButton.Name]
+    
+    TweenService:Create(tabButton, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Background, TextColor3 = THEME.Text}):Play()
+    
+    if page then
+        page.Visible = true
+        page.GroupTransparency = 1
+        TweenService:Create(page, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {GroupTransparency = 0}):Play()
+    end
+
+    task.delay(0.3, function()
+        isSwitchingTabs = false
+    end)
+end
+
+function CreateTab(name, icon, order)
+    local button = Instance.new("TextButton", tabContainer)
+    button.Name = name
+    button.Size = UDim2.new(0, 115, 1, -10)
+    button.BackgroundColor3 = THEME.Primary
+    button.Font = THEME.FontBold
+    button.Text = " " .. icon .. "  " .. name
+    button.TextColor3 = THEME.TextSecondary
+    button.TextSize = 14
+    button.LayoutOrder = order
+    Instance.new("UICorner", button).CornerRadius = UDim.new(0, 6)
+    
+    local page = Instance.new("CanvasGroup", contentContainer)
+    page.Name = name
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.GroupTransparency = 1
+    page.Visible = false
+    pages[name] = page
+
+    table.insert(ConnectionManager, button.MouseButton1Click:Connect(function() SwitchTab(button) end))
+    return page, button
+end
+
+function CreateSearchBox(parent, placeholder)
+    local box = Instance.new("TextBox", parent)
+    box.Size = UDim2.new(1, 0, 0, 34)
+    box.BackgroundColor3 = THEME.Background
+    box.Font = THEME.Font
+    box.TextColor3 = THEME.Text
+    box.TextSize = 14
+    box.ClearTextOnFocus = false
+    box.Text = ""
+    box.PlaceholderText = placeholder or "Search..."
+    box.PlaceholderColor3 = THEME.TextSecondary
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+    Instance.new("UIPadding", box).PaddingLeft = UDim.new(0, 10)
+    return box
+end
+
+function CreateScrollingList(parent)
+    local scroll = Instance.new("ScrollingFrame", parent)
+    scroll.Size = UDim2.new(1, 0, 1, -40)
+    scroll.Position = UDim2.new(0, 0, 0, 40)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarImageColor3 = THEME.Accent
+    scroll.ScrollBarThickness = 5
+    local layout = Instance.new("UIListLayout", scroll)
+    layout.Padding = UDim.new(0, 2)
+    layout.SortOrder = Enum.SortOrder.Name
+    Instance.new("UIPadding", scroll, { Padding = UDim.new(0, 2) })
+    return scroll
+end
+
+function CreateHoverEffect(button)
+    local originalColor = button.BackgroundColor3
+    
+    table.insert(ConnectionManager, button.MouseEnter:Connect(function()
+        SFX.Hover:Play()
+        button.BackgroundColor3 = THEME.AccentDark
+    end))
+    
+    table.insert(ConnectionManager, button.MouseLeave:Connect(function()
+        button.BackgroundColor3 = originalColor
+    end))
+end
+
+function SetupPageLayout(page, data, createControls, searchPlaceholder)
+    local pageState = { Selected = data and data[1] or nil }
+
+    local listFrame = Instance.new("Frame", page)
+    listFrame.Size = UDim2.new(0.4, -5, 1, 0)
+    listFrame.BackgroundTransparency = 1
+    listFrame.BackgroundColor3 = THEME.Secondary
+    Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 8)
+
+    local controlsFrame = Instance.new("Frame", page)
+    controlsFrame.Size = UDim2.new(0.6, -5, 1, 0)
+    controlsFrame.Position = UDim2.new(0.4, 5, 0, 0)
+    controlsFrame.BackgroundTransparency = 1
+    local controlsLayout = Instance.new("UIListLayout", controlsFrame)
+    controlsLayout.Padding = UDim.new(0, 10)
+    controlsLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+
+    local searchBox = CreateSearchBox(listFrame, searchPlaceholder)
+    local scrollList = CreateScrollingList(listFrame)
+    local itemButtons = {}
+
+    local function updateSelection(button, name)
+        pageState.Selected = name
+        for _, b in ipairs(itemButtons) do
+            b.BackgroundColor3 = THEME.Primary
+        end
+        button.BackgroundColor3 = THEME.Accent
+        pageState.UpdateControls() 
+    end
+    
+    pageState.UpdateControls = createControls(controlsFrame, pageState)
+
+    if data and #data > 0 then
+        for _, itemName in ipairs(data) do
+            local itemButton = Instance.new("TextButton", scrollList)
+            itemButton.Name = itemName
+            itemButton.Size = UDim2.new(1, 0, 0, 18)
+            itemButton.BackgroundColor3 = THEME.Primary
+            itemButton.Font = THEME.Font
+            itemButton.Text = " " .. itemName
+            itemButton.TextColor3 = THEME.Text
+            itemButton.TextSize = 12
+            itemButton.TextXAlignment = Enum.TextXAlignment.Left
+            Instance.new("UICorner", itemButton).CornerRadius = UDim.new(0, 4)
+            table.insert(itemButtons, itemButton)
+            table.insert(ConnectionManager, itemButton.MouseButton1Click:Connect(function() updateSelection(itemButton, itemName) end))
+        end
+        
+        table.insert(ConnectionManager, searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+            local query = string.lower(searchBox.Text)
+            for _, btn in ipairs(itemButtons) do
+                btn.Visible = string.find(string.lower(btn.Name), query, 1, true)
+            end
+        end))
+        
+        updateSelection(itemButtons[1], itemButtons[1].Name)
+    else
+        searchBox.Visible = false
+        local noItemsLabel = Instance.new("TextLabel", scrollList)
+        noItemsLabel.Size = UDim2.new(1, -10, 0, 50)
+        noItemsLabel.Position = UDim2.new(0.5, 0, 0, 10)
+        noItemsLabel.AnchorPoint = Vector2.new(0.5, 0)
+        noItemsLabel.BackgroundTransparency = 1
+        noItemsLabel.Font = THEME.Font
+        noItemsLabel.TextColor3 = THEME.TextSecondary
+        noItemsLabel.TextWrapped = true
+        noItemsLabel.Text = "No items found."
+    end
+    
+    pageState.UpdateControls()
+end
+
+function CreateLabeledInput(parent, labelText, placeholderText)
+    local container = Instance.new("Frame", parent)
+    container.Size = UDim2.new(1, 0, 0, 55)
+    container.BackgroundTransparency = 1
+    local layout = Instance.new("UIListLayout", container)
+    layout.Padding = UDim.new(0, 5)
+
+    local label = Instance.new("TextLabel", container)
+    label.Size = UDim2.new(1, 0, 0, 15)
+    label.BackgroundTransparency = 1
+    label.Font = THEME.Font
+    label.TextColor3 = THEME.TextSecondary
+    label.Text = labelText
+    label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local input = Instance.new("TextBox", container)
+    input.Size = UDim2.new(1, 0, 0, 35)
+    input.BackgroundColor3 = THEME.Background
+    input.Font = THEME.Font
+    input.TextColor3 = THEME.Text
+    input.TextSize = 14
+    input.Text = ""
+    input.PlaceholderText = placeholderText or ""
+    input.PlaceholderColor3 = THEME.TextSecondary
+    Instance.new("UICorner", input).CornerRadius = UDim.new(0, 6)
+    Instance.new("UIPadding", input).PaddingLeft = UDim.new(0, 10)
+    return input
+end
+
+function CreateActionButton(parent, text, icon, isPrimary)
+    local button = Instance.new("TextButton", parent)
+    button.Size = UDim2.new(1, 0, 0, 35)
+    button.BackgroundColor3 = isPrimary and THEME.Accent or THEME.Secondary
+    button.Font = THEME.FontBold
+    button.Text = " " .. icon .. "  " .. text
+    button.TextColor3 = THEME.Text
+    button.TextSize = 15
+    Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
+    CreateHoverEffect(button)
+    
+    table.insert(ConnectionManager, button.MouseButton1Click:Connect(function()
+        SFX.Click:Play()
+    end))
+    
+    return button
+end
+
+local petsPage, petsTab = CreateTab("Pets", "ðŸ¾", 1)
+SetupPageLayout(petsPage, pet_names, function(controls, pageState)
+    local selectedLabel = Instance.new("TextLabel", controls)
+    selectedLabel.Size = UDim2.new(1, 0, 0, 24)
+    selectedLabel.Font = THEME.FontBold
+    selectedLabel.TextColor3 = THEME.Text
+    selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    selectedLabel.BackgroundTransparency = 1
+    selectedLabel.LayoutOrder = 1
+
+    local kgInput = CreateLabeledInput(controls, "Pet Size (KG)", "Default: 1")
+    kgInput.LayoutOrder = 2
+    local ageInput = CreateLabeledInput(controls, "Pet Age", "Default: 1")
+    ageInput.LayoutOrder = 3
+    
+    local spawnButton = CreateActionButton(controls, "SPAWN PET", "âœ¨", true)
+    spawnButton.LayoutOrder = 10
+    
+    table.insert(ConnectionManager, spawnButton.MouseButton1Click:Connect(function()
+        if not pageState.Selected then return end
+        Spawner.SpawnPet(pageState.Selected, tonumber(kgInput.Text) or 1, tonumber(ageInput.Text) or 1)
+    end))
+    
+    return function()
+        selectedLabel.Text = "Selected: " .. (pageState.Selected or "None")
+    end
+end, "Search pets...")
+
+local seedsPage, seedsTab = CreateTab("Seeds", "ðŸŒ±", 2)
+SetupPageLayout(seedsPage, seed_names, function(controls, pageState)
+    local selectedLabel = Instance.new("TextLabel", controls)
+    selectedLabel.Size = UDim2.new(1, 0, 0, 24)
+    selectedLabel.Font = THEME.FontBold
+    selectedLabel.TextColor3 = THEME.Text
+    selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    selectedLabel.BackgroundTransparency = 1
+    selectedLabel.LayoutOrder = 1
+
+    local buttonContainer = Instance.new("Frame", controls)
+    buttonContainer.Size = UDim2.new(1, 0, 0, 80)
+    buttonContainer.BackgroundTransparency = 1
+    buttonContainer.LayoutOrder = 10
+    local buttonLayout = Instance.new("UIListLayout", buttonContainer)
+    buttonLayout.Padding = UDim.new(0, 10)
+
+    local spawnSeedBtn = CreateActionButton(buttonContainer, "SPAWN SEED", "âœ¨", true)
+    table.insert(ConnectionManager, spawnSeedBtn.MouseButton1Click:Connect(function() if pageState.Selected then Spawner.SpawnSeed(pageState.Selected) end end))
+    
+    local placeSeedBtn = CreateActionButton(buttonContainer, "PLACE SEED", "ðŸ“", false)
+    table.insert(ConnectionManager, placeSeedBtn.MouseButton1Click:Connect(function() if pageState.Selected and Spawner.PlaceSeed then Spawner.PlaceSeed(pageState.Selected) end end))
+    
+    return function()
+        selectedLabel.Text = "Selected: " .. (pageState.Selected or "None")
+    end
+end, "Search seeds...")
+
+local eggsPage, eggsTab = CreateTab("Eggs", "ðŸ¥š", 3)
+SetupPageLayout(eggsPage, egg_names, function(controls, pageState)
+    local selectedLabel = Instance.new("TextLabel", controls)
+    selectedLabel.Size = UDim2.new(1, 0, 0, 24)
+    selectedLabel.Font = THEME.FontBold
+    selectedLabel.TextColor3 = THEME.Text
+    selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    selectedLabel.BackgroundTransparency = 1
+    selectedLabel.LayoutOrder = 1
+
+    local spawnButton = CreateActionButton(controls, "SPAWN EGG", "âœ¨", true)
+    spawnButton.LayoutOrder = 10
+    
+    table.insert(ConnectionManager, spawnButton.MouseButton1Click:Connect(function() if pageState.Selected then Spawner.SpawnEgg(pageState.Selected) end end))
+    
+    return function()
+        selectedLabel.Text = "Selected: " .. (pageState.Selected or "None")
+    end
+end, "Search eggs...")
+
+local flowerPackPage, flowerPackTab = CreateTab("Flower Pack", "ðŸŒ¸", 4)
+SetupPageLayout(flowerPackPage, flower_seed_pack_names, function(controls, pageState)
+    local selectedLabel = Instance.new("TextLabel", controls)
+    selectedLabel.Size = UDim2.new(1, 0, 0, 24)
+    selectedLabel.Font = THEME.FontBold
+    selectedLabel.TextColor3 = THEME.Text
+    selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    selectedLabel.BackgroundTransparency = 1
+    selectedLabel.LayoutOrder = 1
+
+    local spinButton = CreateActionButton(controls, "SPIN FOR ITEM", "ðŸŒ€", true)
+    spinButton.LayoutOrder = 10
+    
+    table.insert(ConnectionManager, spinButton.MouseButton1Click:Connect(function()
+        if pageState.Selected and Spawner.Spin then Spawner.Spin(pageState.Selected) end
+    end))
+
+    return function()
+        selectedLabel.Text = "Selected: " .. (pageState.Selected or "None")
+    end
+end, "Search flowers...")
+
+SwitchTab(petsTab)
+
+local toggleButton = Instance.new("TextButton", screenGui)
+toggleButton.Name = "ToggleUI"
+toggleButton.Size = UDim2.new(0, 50, 0, 50)
+toggleButton.Position = UDim2.new(0, 20, 0.5, -25)
+toggleButton.BackgroundColor3 = THEME.Accent
+toggleButton.Font = THEME.FontBold
+toggleButton.Text = "SP"
+toggleButton.TextColor3 = THEME.Text
+toggleButton.TextSize = 20
+Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(1, 0)
+createDraggable(toggleButton, toggleButton)
+CreateHoverEffect(toggleButton)
+
+local isVisible = false
+local function toggleVisibility()
+    SFX.OpenClose:Play()
+    isVisible = not isVisible
+    mainFrame.Visible = isVisible
+end
+
+table.insert(ConnectionManager, toggleButton.MouseButton1Click:Connect(toggleVisibility))
+table.insert(ConnectionManager, closeButton.MouseButton1Click:Connect(toggleVisibility))
