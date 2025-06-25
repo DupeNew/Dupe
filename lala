@@ -1,41 +1,49 @@
+--[[
+    Advanced Auto-Unequip (Module Hooking)
+    This script uses the game's internal functions for maximum compatibility and stealth.
+]]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
-local SingleEquippedPetAttribute = "ActivePetV2"
-local AllEquippedPetsAttribute = "ActivePets"
+-- Configuration
 local GardenCenterPosition = Vector3.new(-170, 15, 525)
 local GardenRadius = 150
+local EquippedPetsAttribute = "ActivePets" -- The attribute holding the table of pet GUIDs
 
-local GameEvents = ReplicatedStorage:WaitForChild("GameEvents", 10)
-if not GameEvents then return end
+-- Hook directly into the game's internal Pet Service Module
+-- This is the 1000 IQ move that makes our script blend in.
+local PetServiceModule = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("PetServices"):WaitForChild("PetsService"))
 
-local PetsServiceEvent = GameEvents:WaitForChild("PetsService", 5)
-if not PetsServiceEvent then return end
+if not PetServiceModule then
+    -- This fallback should never be needed, but is good practice.
+    warn("[Error] Could not hook into PetServiceModule. Script cannot run.")
+    return
+end
 
 task.spawn(function()
     while task.wait(1) do
         local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            if (rootPart.Position - GardenCenterPosition).Magnitude <= GardenRadius then
-                local singleGuid = LocalPlayer:GetAttribute(SingleEquippedPetAttribute)
-                if singleGuid and type(singleGuid) == "string" and singleGuid:sub(1, 1) == "{" then
-                    PetsServiceEvent:FireServer("UnequipPet", singleGuid)
-                    task.wait(3)
-                else
-                    local allGuidsTable = LocalPlayer:GetAttribute(AllEquippedPetsAttribute)
-                    if type(allGuidsTable) == "table" and #allGuidsTable > 0 then
-                        for _, petGuid in ipairs(allGuidsTable) do
-                            if type(petGuid) == "string" and #petGuid > 10 then
-                                PetsServiceEvent:FireServer("UnequipPet", petGuid)
-                                task.wait(0.2)
-                            end
-                        end
-                        task.wait(3)
+        if rootPart and (rootPart.Position - GardenCenterPosition).Magnitude <= GardenRadius then
+            
+            local equippedPets = LocalPlayer:GetAttribute(EquippedPetsAttribute)
+            
+            if type(equippedPets) == "table" and #equippedPets > 0 then
+                -- We iterate backwards because the game's code might modify the table as we unequip.
+                -- This is a professional technique to prevent skipping items.
+                for i = #equippedPets, 1, -1 do
+                    local petGuid = equippedPets[i]
+                    if type(petGuid) == "string" then
+                        -- Call the game's own unequip function.
+                        -- This is far more subtle than firing the remote event ourselves.
+                        PetServiceModule:UnequipPet(petGuid)
+                        task.wait(0.2)
                     end
                 end
+                task.wait(3)
             end
         end
     end
