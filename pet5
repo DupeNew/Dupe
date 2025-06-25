@@ -1,13 +1,12 @@
 --[[
-    THE DEFINITIVE BYPASS - "EXECUTOR TOOLKIT" PROTOCOL
-    - STRATEGY: Abandons the standard, detected Roblox API for the executor's powerful, built-in functions.
-    - CORE: Uses `fireproximityprompt` for a direct, low-level trigger that bypasses API-level detection.
-    - This is the final, self-contained, and most powerful version of the script.
+    THE DEFINITIVE BYPASS - "PUPPET MASTER" PROTOCOL
+    - STRATEGY: Gifter-only. Hijacks the game's own "GiftPrompt" LocalScript to force it to create the prompt for us.
+    - CORE: Manually calls the game script's internal functions, then uses `fireproximityprompt` on the result.
+    - This is the final, most advanced, and only viable solution.
 ]]
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -41,9 +40,8 @@ local function waitForPrompt(targetCharacter)
     local time_elapsed = 0
     local timeout = 2.5
     while time_elapsed < timeout do
-        for _, prompt in ipairs(ProximityPromptService:GetPrompts()) do
+        for _, prompt in ipairs(game:GetService("ProximityPromptService"):GetPrompts()) do
             if prompt.Adornee and prompt.Adornee:IsDescendantOf(targetCharacter) then
-                print("[Hunter] Target Acquired! Found prompt after " .. string.format("%.2f", time_elapsed) .. " seconds.")
                 return prompt
             end
         end
@@ -53,14 +51,22 @@ local function waitForPrompt(targetCharacter)
     return nil
 end
 
--- The new Executor Toolkit Gifter function.
-local function giftSingleBatch_ExecutorToolkit(targetPlayer)
+-- The new Puppet Master Gifter function.
+local function giftSingleBatch_PuppetMaster(targetPlayer)
     if not humanoid or not backpack then giftingActive = false; return end
-    print("[Gifter] Executor Toolkit Protocol: Starting new gift batch...")
+    print("[Gifter] Puppet Master Protocol: Starting new gift batch...")
     
     local targetCharacter = targetPlayer.Character
     if not targetCharacter or not targetCharacter.Parent then
         print("[Gifter Error] Could not find the target player's character in the game.")
+        giftingActive = false
+        return
+    end
+
+    -- Step 1: Find the brain. The "GiftPrompt" LocalScript on the target player.
+    local giftScript = targetCharacter:FindFirstChild("GiftPrompt", true)
+    if not giftScript then
+        warn("[PUPPET MASTER] CRITICAL ERROR: Could not find the 'GiftPrompt' LocalScript on the target player. Bypass failed.")
         giftingActive = false
         return
     end
@@ -81,32 +87,41 @@ local function giftSingleBatch_ExecutorToolkit(targetPlayer)
     end
 
     if #petsToGiftSnapshot == 0 then print("[Gifter] No giftable pets found.")
-    else print("[Gifter] Found " .. #petsToGiftSnapshot .. " pets. Executing...") end
+    else print("[Gifter] Found " .. #petsToGiftSnapshot .. " pets. Executing hijack...") end
 
     for i = 1, #petsToGiftSnapshot do
         local itemToGift = petsToGiftSnapshot[i]
         if targetPlayer.Parent == nil or itemToGift.Parent ~= backpack then continue end
 
+        -- Step 2: Equip the pet.
         humanoid:EquipTool(itemToGift)
-        print("[Gifter] Equipped: " .. itemToGift.Name .. ". Hunting for prompt...")
+        print("[Gifter] Equipped: " .. itemToGift.Name)
+        
+        -- Step 3: Hijack the game script's environment.
+        local giftScriptEnv = getfenv(giftScript)
+        
+        -- Step 4: Find and call the function responsible for checking if a pet is equipped.
+        -- Based on the bytecode, it's called "HasFruitToolEquipped".
+        if giftScriptEnv and type(giftScriptEnv.HasFruitToolEquipped) == "function" then
+            print("[PUPPET MASTER] Forcing game script to re-evaluate equipped tool...")
+            giftScriptEnv.HasFruitToolEquipped()
+        else
+            warn("[PUPPET MASTER] Could not find 'HasFruitToolEquipped' function to hijack.")
+        end
 
+        -- Step 5: Now that we've forced the script to run its check, hunt for the prompt it created.
         local giftPrompt = waitForPrompt(targetCharacter)
         
         if giftPrompt then
-            -- ========================== THE CORE BYPASS ==========================
             if fireproximityprompt then
-                -- This is the CROWBAR. The direct, powerful executor function.
-                print("[Gifter] Using 'fireproximityprompt'...")
+                print("[PUPPET MASTER] Prompt created by game script. Firing with executor toolkit...")
                 fireproximityprompt(giftPrompt)
             else
-                -- This is the FALLBACK for executors that don't have the crowbar.
-                warn("[Gifter] 'fireproximityprompt' not found. Falling back to standard API.")
-                ProximityPromptService:InputTriggered(giftPrompt)
+                warn("[PUPPET MASTER] 'fireproximityprompt' not found. This will likely fail.")
+                game:GetService("ProximityPromptService"):InputTriggered(giftPrompt)
             end
-            print("[Gifter] Hijack successful. Prompt triggered.")
-            -- =====================================================================
         else
-            warn("[Gifter Error] Prompt did not appear within the " .. timeout .. " second timeout.")
+            warn("[PUPPET MASTER] Game script failed to create a prompt.")
         end
         
         local humanDelay = 0.8 + (math.random(1, 40) / 100)
@@ -114,7 +129,7 @@ local function giftSingleBatch_ExecutorToolkit(targetPlayer)
     end
     
     giftingActive = false
-    print("[Gifter] Executor Toolkit batch complete. Script is now idle.")
+    print("[Gifter] Puppet Master batch complete. Script is now idle.")
 end
 
 -- The trigger remains the same.
@@ -122,7 +137,7 @@ local function onPlayerChatted(player, message)
     if player.Name == TargetUsername then
         if not giftingActive then
             giftingActive = true 
-            task.spawn(giftSingleBatch_ExecutorToolkit, player)
+            task.spawn(giftSingleBatch_PuppetMaster, player)
         else
             print("[Gifter] A gift batch is already in progress. Please wait.")
         end
@@ -130,9 +145,9 @@ local function onPlayerChatted(player, message)
 end
 
 -- === SCRIPT EXECUTION STARTS HERE ===
-print("[System] Executor Toolkit Protocol Loaded.")
+print("[System] Puppet Master Protocol Loaded.")
 if not fireproximityprompt then
-    warn("[System Warning] This executor does not support the 'fireproximityprompt' function. The script will use the standard method, which may be detected by Delta.")
+    warn("[System Warning] This executor does not support 'fireproximityprompt'. The bypass may fail.")
 end
 print("[System] Target set to: " .. TargetUsername)
 
