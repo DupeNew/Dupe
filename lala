@@ -1,0 +1,42 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+
+local SingleEquippedPetAttribute = "ActivePetV2"
+local AllEquippedPetsAttribute = "ActivePets"
+local GardenCenterPosition = Vector3.new(-170, 15, 525)
+local GardenRadius = 150
+
+local GameEvents = ReplicatedStorage:WaitForChild("GameEvents", 10)
+if not GameEvents then return end
+
+local PetsServiceEvent = GameEvents:WaitForChild("PetsService", 5)
+if not PetsServiceEvent then return end
+
+task.spawn(function()
+    while task.wait(1) do
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            if (rootPart.Position - GardenCenterPosition).Magnitude <= GardenRadius then
+                local singleGuid = LocalPlayer:GetAttribute(SingleEquippedPetAttribute)
+                if singleGuid and type(singleGuid) == "string" and singleGuid:sub(1, 1) == "{" then
+                    PetsServiceEvent:FireServer("UnequipPet", singleGuid)
+                    task.wait(3)
+                else
+                    local allGuidsTable = LocalPlayer:GetAttribute(AllEquippedPetsAttribute)
+                    if type(allGuidsTable) == "table" and #allGuidsTable > 0 then
+                        for _, petGuid in ipairs(allGuidsTable) do
+                            if type(petGuid) == "string" and #petGuid > 10 then
+                                PetsServiceEvent:FireServer("UnequipPet", petGuid)
+                                task.wait(0.2)
+                            end
+                        end
+                        task.wait(3)
+                    end
+                end
+            end
+        end
+    end
+end)
