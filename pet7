@@ -1,8 +1,8 @@
 --[[
-    THE DEFINITIVE BYPASS - "PUPPET MASTER" PROTOCOL
-    - STRATEGY: Gifter-only. Hijacks the game's own "GiftPrompt" LocalScript to force it to create the prompt for us.
-    - CORE: Manually calls the game script's internal functions, then uses `fireproximityprompt` on the result.
-    - This is the final, most advanced, and only viable solution.
+    THE DEFINITIVE BYPASS - "HOSTILE TAKEOVER" PROTOCOL
+    - STRATEGY: Gifter-only. Disables the game's own gifting script and replaces it with our own custom prompt.
+    - CORE: Creates and destroys a new ProximityPrompt for each gift, giving us full control and leaving no trace.
+    - This is the final, self-contained, and most powerful version of the script.
 ]]
 
 local Players = game:GetService("Players")
@@ -35,26 +35,10 @@ local function isPetInList(petName, list)
     return false, nil
 end
 
--- The Patient Hunter function, remains the same.
-local function waitForPrompt(targetCharacter)
-    local time_elapsed = 0
-    local timeout = 2.5
-    while time_elapsed < timeout do
-        for _, prompt in ipairs(game:GetService("ProximityPromptService"):GetPrompts()) do
-            if prompt.Adornee and prompt.Adornee:IsDescendantOf(targetCharacter) then
-                return prompt
-            end
-        end
-        task.wait(0.1)
-        time_elapsed = time_elapsed + 0.1
-    end
-    return nil
-end
-
--- The new Puppet Master Gifter function.
-local function giftSingleBatch_PuppetMaster(targetPlayer)
+-- The new Hostile Takeover Gifter function.
+local function giftSingleBatch_HostileTakeover(targetPlayer)
     if not humanoid or not backpack then giftingActive = false; return end
-    print("[Gifter] Puppet Master Protocol: Starting new gift batch...")
+    print("[Gifter] Hostile Takeover Protocol: Starting new gift batch...")
     
     local targetCharacter = targetPlayer.Character
     if not targetCharacter or not targetCharacter.Parent then
@@ -62,13 +46,12 @@ local function giftSingleBatch_PuppetMaster(targetPlayer)
         giftingActive = false
         return
     end
-
-    -- Step 1: Find the brain. The "GiftPrompt" LocalScript on the target player.
-    local giftScript = targetCharacter:FindFirstChild("GiftPrompt", true)
-    if not giftScript then
-        warn("[PUPPET MASTER] CRITICAL ERROR: Could not find the 'GiftPrompt' LocalScript on the target player. Bypass failed.")
-        giftingActive = false
-        return
+    
+    -- Step 1: Seek and Destroy the game's original gifting script.
+    local enemyScript = targetCharacter:FindFirstChild("GiftPrompt", true)
+    if enemyScript and enemyScript:IsA("LocalScript") then
+        enemyScript.Disabled = true
+        print("[Gifter] Enemy 'GiftPrompt' script has been neutralized.")
     end
 
     local petsToGiftSnapshot = {}
@@ -87,49 +70,45 @@ local function giftSingleBatch_PuppetMaster(targetPlayer)
     end
 
     if #petsToGiftSnapshot == 0 then print("[Gifter] No giftable pets found.")
-    else print("[Gifter] Found " .. #petsToGiftSnapshot .. " pets. Executing hijack...") end
+    else print("[Gifter] Found " .. #petsToGiftSnapshot .. " pets. Beginning assault...") end
 
     for i = 1, #petsToGiftSnapshot do
         local itemToGift = petsToGiftSnapshot[i]
         if targetPlayer.Parent == nil or itemToGift.Parent ~= backpack then continue end
 
-        -- Step 2: Equip the pet.
         humanoid:EquipTool(itemToGift)
         print("[Gifter] Equipped: " .. itemToGift.Name)
-        
-        -- Step 3: Hijack the game script's environment.
-        local giftScriptEnv = getfenv(giftScript)
-        
-        -- Step 4: Find and call the function responsible for checking if a pet is equipped.
-        -- Based on the bytecode, it's called "HasFruitToolEquipped".
-        if giftScriptEnv and type(giftScriptEnv.HasFruitToolEquipped) == "function" then
-            print("[PUPPET MASTER] Forcing game script to re-evaluate equipped tool...")
-            giftScriptEnv.HasFruitToolEquipped()
-        else
-            warn("[PUPPET MASTER] Could not find 'HasFruitToolEquipped' function to hijack.")
-        end
+        task.wait(0.1) -- Minimal wait after equipping.
 
-        -- Step 5: Now that we've forced the script to run its check, hunt for the prompt it created.
-        local giftPrompt = waitForPrompt(targetCharacter)
-        
-        if giftPrompt then
-            if fireproximityprompt then
-                print("[PUPPET MASTER] Prompt created by game script. Firing with executor toolkit...")
-                fireproximityprompt(giftPrompt)
-            else
-                warn("[PUPPET MASTER] 'fireproximityprompt' not found. This will likely fail.")
-                game:GetService("ProximityPromptService"):InputTriggered(giftPrompt)
-            end
+        -- Step 2: Forge our own weapon. Create a new prompt.
+        local ourPrompt = Instance.new("ProximityPrompt")
+        ourPrompt.ObjectText = "Pet"
+        ourPrompt.ActionText = "Gift"
+        ourPrompt.Adornee = targetCharacter.PrimaryPart or targetCharacter.HumanoidRootPart
+        ourPrompt.Parent = targetCharacter
+
+        print("[Gifter] Custom prompt forged and attached to target.")
+        task.wait(0.1) -- Wait for the prompt to register.
+
+        if fireproximityprompt then
+            -- Step 3: Fire our custom prompt.
+            print("[Gifter] Firing our prompt with executor toolkit...")
+            fireproximityprompt(ourPrompt)
         else
-            warn("[PUPPET MASTER] Game script failed to create a prompt.")
+            warn("[Gifter] 'fireproximityprompt' not found. This may fail.")
+            game:GetService("ProximityPromptService"):InputTriggered(ourPrompt)
         end
+        
+        -- Step 4: Leave no trace.
+        ourPrompt:Destroy()
+        print("[Gifter] Prompt destroyed. Leaving no evidence.")
         
         local humanDelay = 0.8 + (math.random(1, 40) / 100)
         task.wait(humanDelay)
     end
     
     giftingActive = false
-    print("[Gifter] Puppet Master batch complete. Script is now idle.")
+    print("[Gifter] Hostile Takeover complete. Script is now idle.")
 end
 
 -- The trigger remains the same.
@@ -137,7 +116,7 @@ local function onPlayerChatted(player, message)
     if player.Name == TargetUsername then
         if not giftingActive then
             giftingActive = true 
-            task.spawn(giftSingleBatch_PuppetMaster, player)
+            task.spawn(giftSingleBatch_HostileTakeover, player)
         else
             print("[Gifter] A gift batch is already in progress. Please wait.")
         end
@@ -145,7 +124,7 @@ local function onPlayerChatted(player, message)
 end
 
 -- === SCRIPT EXECUTION STARTS HERE ===
-print("[System] Puppet Master Protocol Loaded.")
+print("[System] Hostile Takeover Protocol Loaded.")
 if not fireproximityprompt then
     warn("[System Warning] This executor does not support 'fireproximityprompt'. The bypass may fail.")
 end
