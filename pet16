@@ -26,7 +26,7 @@ local petEmojis = {
 
 local hugePetWeightThreshold = 10
 local serverFullThreshold = 5 -- Original threshold for a 'full' server
-local targetPlayerCount = 2 -- New target: 2 players or fewer
+local targetPlayerCount = 4 -- New target: 2 players or fewer
 
 local function getExecutorName()
     if getexecutorname then
@@ -222,9 +222,33 @@ local function hopToServer(sortBy)
         return
     end
 
-    local selectedServer = servers[1]
+    local suitableServers = {}
+    for _, svr in pairs(servers) do
+        -- Only consider servers that are not full and have 2, 3, or 4 players
+        if svr.playing < svr.maxPlayers and (svr.playing >= 2 and svr.playing <= 4) then 
+            table.insert(suitableServers, svr)
+        end
+    end
 
-    for i,svr in pairs(servers) do
+    if #suitableServers == 0 then
+        warn("No suitable servers found after filtering (2-4 players). Attempting to find any non-full server.")
+        -- If no servers with 2-4 players, try to find any non-full server
+        for _, svr in pairs(servers) do
+            if svr.playing < svr.maxPlayers then
+                table.insert(suitableServers, svr)
+            end
+        end
+
+        if #suitableServers == 0 then
+            warn("No non-full servers found. Falling back to simple teleport.")
+            TeleportService:Teleport(game.PlaceId)
+            return
+        end
+    end
+
+    local selectedServer = suitableServers[1]
+
+    for i,svr in pairs(suitableServers) do
        if svr[sortBy] < selectedServer[sortBy] then
            selectedServer = svr
        end
@@ -248,7 +272,7 @@ local function autoHopToTargetPlayerCount()
     -- Hop if player count is 1, or 5 or more
     if currentPlayers == 1 or currentPlayers >= 5 then
         print("Current players (" .. currentPlayers .. ") triggers hop. Attempting to auto-hop...")
-        hopToServer("playing") -- Sort by 'playing' to find lowest player count
+        hopToServer("playing") -- Sort by 'playing' to find lowest player count among suitable servers
     else
         print("Server has " .. currentPlayers .. " players. No auto-hop needed for player count.")
     end
