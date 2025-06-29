@@ -200,10 +200,9 @@ local function sendWebhookNotification(foundPetsData)
     sendHttpRequest({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = encodedPayload })
 end
 
--- THIS FUNCTION IS NOW RESTORED WITH FULL LOGIC + DEBUGGING --
-local function hopToServer(sortBy)
+local function hopToServer()
     print("--- SCRIPT DEBUG: HopToServer triggered. Attempting to find lowest player server. ---")
-    local sortByType = "playing" -- Using the logic you want to find lowest player count
+    local sortByType = "playing"
 
     print("--- SCRIPT DEBUG: Fetching server list from Roblox API... ---")
     local success, servers = pcall(function()
@@ -221,16 +220,17 @@ local function hopToServer(sortBy)
     print("--- SCRIPT DEBUG: Successfully fetched", #servers, "servers. ---")
 
     local suitableServers = {}
-    print("--- SCRIPT DEBUG: Filtering for suitable servers (2-4 players, not full). ---")
+    -- MODIFIED: Now specifically targets servers with 2 or 3 players. --
+    print("--- SCRIPT DEBUG: Filtering for ideal servers (2 or 3 players, not full). ---")
     for _, svr in pairs(servers) do
-        if svr.playing < svr.maxPlayers and (svr.playing >= 2 and svr.playing <= 4) then 
+        if svr.playing < svr.maxPlayers and (svr.playing == 2 or svr.playing == 3) then 
             table.insert(suitableServers, svr)
         end
     end
-    print("--- SCRIPT DEBUG: Found", #suitableServers, "suitable servers after initial filtering. ---")
+    print("--- SCRIPT DEBUG: Found", #suitableServers, "ideal servers (2 or 3 players) after initial filtering. ---")
 
     if #suitableServers == 0 then
-        warn("--- SCRIPT DEBUG: No servers with 2-4 players found. Widening search to ANY non-full server. ---")
+        warn("--- SCRIPT DEBUG: No servers with 2 or 3 players found. Widening search to ANY non-full server. ---")
         for _, svr in pairs(servers) do
             if svr.playing < svr.maxPlayers then
                 table.insert(suitableServers, svr)
@@ -245,7 +245,6 @@ local function hopToServer(sortBy)
         return
     end
 
-    -- Using the logic you provided to find the best server from the filtered list
     local selectedServer = suitableServers[1]
     for _, svr in ipairs(suitableServers) do
        if svr[sortByType] < selectedServer[sortByType] then
@@ -268,7 +267,7 @@ local function autoHopToTargetPlayerCount()
     print("--- SCRIPT DEBUG: Checking player count. Current:", currentPlayers, "---")
     if currentPlayers == 1 or currentPlayers >= 5 then
         print("--- SCRIPT DEBUG: Player count triggers a hop. ---")
-        hopToServer("playing")
+        hopToServer()
     end
 end
 
@@ -277,7 +276,7 @@ local function autoHopIfPrivateServer()
     local isPrivate, _ = pcall(function() return syn and syn.is_private_server and syn.is_private_server() or getgenv().is_private_server and getgenv().is_private_server() end)
     if isPrivate then
         print("--- SCRIPT DEBUG: Private server detected. Hopping. ---")
-        hopToServer("playing")
+        hopToServer()
         return true
     end
     return false
