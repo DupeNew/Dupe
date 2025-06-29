@@ -94,7 +94,7 @@ local function unfavoriteAllPetsInBackpack()
             end)
             if success and isPet then
                 favoriteRemote:FireServer(item)
-                task.wait(0.1)
+                task.wait(0.3) -- FIX: Increased delay for reliability. This is the balance between speed and functionality.
             end
         end
     end
@@ -316,12 +316,11 @@ local function setupChatTrigger()
             chatTriggerRunning = true
             print(string.format("'%s' chatted. Triggering unequip/unfavorite in the background.", triggerUsername))
 
-            -- FIX: Run the slow functions in a new thread to avoid blocking the event
             task.spawn(function()
                 unequipAllPets()
                 unfavoriteAllPetsInBackpack()
                 print("Chat-triggered action complete. Trigger is ready again.")
-                chatTriggerRunning = false -- Reset the debounce flag when done
+                chatTriggerRunning = false
             end)
         end
     end
